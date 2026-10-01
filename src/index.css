@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --c-bg: #f4f6fb;
+  --c-surface: #ffffff;
+  --c-subtle: #eef1f8;
+  --c-line: #dfe5f0;
+  --c-fg: #0d1a36;
+  --c-muted: #5a6784;
+  --c-accent: #274ec4;
+  --c-accent-hover: #1e3fa3;
+  --c-accent-soft: #e6ecfd;
+  --c-danger: #c92a37;
+  --c-danger-soft: #fdeaec;
+  --c-success: #12795a;
+}
+.dark {
+  --c-bg: #080f22;
+  --c-surface: #0f1a36;
+  --c-subtle: #15234a;
+  --c-line: #223260;
+  --c-fg: #eaf0ff;
+  --c-muted: #94a3c8;
+  --c-accent: #7b97ff;
+  --c-accent-hover: #9bb0ff;
+  --c-accent-soft: #1a2b5e;
+  --c-danger: #ff7a85;
+  --c-danger-soft: #3a1620;
+  --c-success: #4fd1a5;
+}
+
+@theme inline {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-subtle: var(--c-subtle);
+  --color-line: var(--c-line);
+  --color-fg: var(--c-fg);
+  --color-muted: var(--c-muted);
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-success: var(--c-success);
+  --color-navy-900: #0f1c3f;
+  --color-navy-950: #0b1530;
+  --color-navy-800: #1a2b5c;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--c-bg);
+  color: var(--c-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
