@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Laptop, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
+import { Camera, KeyRound, Laptop, Lock, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -13,6 +13,9 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAvatarMutations, useAvatarUrl, useProfile, useUpdateDisplayName } from '@/hooks/useProfile'
 import { useTheme, type ThemeChoice } from '@/hooks/useTheme'
 import { useInstallPrompt } from '@/hooks/useInstallPrompt'
+import { usePin } from '@/hooks/usePin'
+import { PinInput } from '@/components/pin/PinInput'
+import { changePin, pinProblem, removePin, setLockTimeout, setPin } from '@/services/pin'
 import { useSchemaVersion } from '@/hooks/useSchemaVersion'
 import { deleteAccount, signOut, updatePassword, verifyCurrentPassword } from '@/services/auth'
 import { validateAvatar } from '@/services/profile'
@@ -123,6 +126,7 @@ function SecuritySection() {
   const toast = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { requirePin } = usePin()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -136,6 +140,7 @@ function SecuritySection() {
     const issue = passwordIssue(next)
     if (issue) return setError(issue)
     if (next !== confirm) return setError('New passwords do not match.')
+    try { await requirePin('Enter your PIN to change your password.') } catch (err) { return setError(toMessage(err)) }
     setLoading(true)
     try {
       await verifyCurrentPassword(user!.email!, current)
@@ -185,6 +190,123 @@ const themes: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Laptop },
 ]
+
+const LOCK_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: 'Every time I open the app' },
+  { value: 1, label: 'After 1 minute away' },
+  { value: 5, label: 'After 5 minutes away' },
+  { value: 15, label: 'After 15 minutes away' },
+  { value: 30, label: 'After 30 minutes away' },
+  { value: 60, label: 'After 1 hour away' },
+]
+
+function PinSection() {
+  const toast = useToast()
+  const { status, hasPin, requirePin, lockNow, markVerified, refreshStatus } = usePin()
+  const [mode, setMode] = useState<'idle' | 'set' | 'change' | 'remove'>('idle')
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const reset = () => { setMode('idle'); setCurrent(''); setNext(''); setConfirm(''); setError(null) }
+  const wrong = (r: { attemptsLeft: number; lockedSeconds: number }) =>
+    r.lockedSeconds > 0 ? `Too many wrong tries. Try again in ${Math.ceil(r.lockedSeconds / 60)} minutes.` : `Wrong PIN. ${r.attemptsLeft} ${r.attemptsLeft === 1 ? 'try' : 'tries'} left.`
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (mode !== 'remove') {
+      const problem = pinProblem(next)
+      if (problem) return setError(problem)
+      if (next !== confirm) return setError('The two PINs do not match.')
+    }
+    if (mode !== 'set' && !/^\d{6}$/.test(current)) return setError('Enter your current 6-digit PIN.')
+    setBusy(true)
+    try {
+      if (mode === 'set') {
+        await setPin(next)
+        markVerified()
+        toast.success('PIN lock is on')
+      } else if (mode === 'change') {
+        const r = await changePin(current, next)
+        if (!r.ok) return setError(wrong(r))
+        markVerified()
+        toast.success('PIN changed')
+      } else {
+        const r = await removePin(current)
+        if (!r.ok) return setError(wrong(r))
+        toast.success('PIN lock is off')
+      }
+      await refreshStatus()
+      reset()
+    } catch (err) {
+      setError(toMessage(err, 'Could not save the PIN. Please try again.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onTimeout = async (minutes: number) => {
+    try {
+      await requirePin('Enter your PIN to change when the app locks.')
+      await setLockTimeout(minutes)
+      await refreshStatus()
+      toast.success('Auto-lock updated')
+    } catch (err) {
+      toast.error(toMessage(err, 'Could not update auto-lock.'))
+    }
+  }
+
+  return (
+    <Section title="PIN lock" description="A 6-digit PIN asked when you open the app and before sensitive actions: moving files to Trash, deleting them forever, deleting folders, changing your password and deleting your account.">
+      {!status ? (
+        <Skeleton className="h-11 w-full max-w-md" />
+      ) : (
+        <div className="max-w-md space-y-5">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <KeyRound className="h-4 w-4 text-muted" aria-hidden />
+            {hasPin ? <span className="text-success">PIN lock is on</span> : <span>PIN lock is off</span>}
+          </p>
+
+          {mode === 'idle' && !hasPin && <Button onClick={() => setMode('set')}>Set a PIN</Button>}
+
+          {mode === 'idle' && hasPin && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={lockNow}><Lock className="h-4 w-4" aria-hidden /> Lock now</Button>
+                <Button variant="secondary" onClick={() => setMode('change')}>Change PIN</Button>
+                <Button variant="ghost" onClick={() => setMode('remove')}>Turn off</Button>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="autolock" className="block text-sm font-medium">Lock the app</label>
+                <select id="autolock" value={status.lockAfterMinutes} onChange={(e) => onTimeout(Number(e.target.value))}
+                  className="h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25">
+                  {LOCK_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </>
+          )}
+
+          {mode !== 'idle' && (
+            <form onSubmit={submit} className="space-y-4" noValidate>
+              {mode !== 'set' && <PinInput label="Current PIN" value={current} onChange={setCurrent} disabled={busy} autoFocus />}
+              {mode !== 'remove' && <PinInput label={mode === 'change' ? 'New PIN' : 'Choose a 6-digit PIN'} value={next} onChange={setNext} disabled={busy} autoFocus={mode === 'set'} />}
+              {mode !== 'remove' && <PinInput label="Repeat the PIN" value={confirm} onChange={setConfirm} disabled={busy} />}
+              {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+              <div className="flex gap-2">
+                <Button type="submit" loading={busy} variant={mode === 'remove' ? 'danger' : 'primary'}>{mode === 'set' ? 'Turn on PIN lock' : mode === 'change' ? 'Change PIN' : 'Turn off PIN lock'}</Button>
+                <Button type="button" variant="secondary" onClick={reset} disabled={busy}>Cancel</Button>
+              </div>
+            </form>
+          )}
+          <p className="text-xs text-muted">Five wrong tries lock the PIN for 15 minutes. Forgot it? Use "Forgot PIN?" on the lock screen and confirm with your account password. Pick a PIN that is not your birthday or a simple pattern.</p>
+        </div>
+      )}
+    </Section>
+  )
+}
 
 function AppearanceSection() {
   const { theme, setTheme } = useTheme()
@@ -248,6 +370,7 @@ function DangerSection() {
   const navigate = useNavigate()
   const toast = useToast()
   const { user } = useAuth()
+  const { requirePin } = usePin()
   const [open, setOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [typed, setTyped] = useState('')
@@ -269,6 +392,7 @@ function DangerSection() {
       return setError('Your password is incorrect.')
     }
     try {
+      await requirePin('Enter your PIN to delete your account and all files.')
       await deleteAccount()
       queryClient.clear()
       navigate('/login', { replace: true })
@@ -307,6 +431,7 @@ export function SettingsPage() {
       <PageHeader title="Settings" />
       <div className="space-y-6">
         <ProfileSection />
+        <PinSection />
         <SecuritySection />
         <AppearanceSection />
         <AppSection />

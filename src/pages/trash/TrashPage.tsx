@@ -12,6 +12,7 @@ import { SelectCheckbox } from '@/components/documents/SelectCheckbox'
 import { useTrash } from '@/hooks/useDocuments'
 import { useExplorerActions } from '@/hooks/useExplorerActions'
 import { useSelection } from '@/hooks/useSelection'
+import { usePin } from '@/hooks/usePin'
 import { emptyTrash } from '@/services/documents'
 import { toMessage } from '@/lib/errors'
 import { formatBytes, formatDate } from '@/utils/format'
@@ -23,6 +24,7 @@ export function TrashPage() {
   const toast = useToast()
   const qc = useQueryClient()
   const actions = useExplorerActions()
+  const { requirePin } = usePin()
   const q = useTrash()
   const docs = useMemo(() => q.data?.pages.flatMap((p) => p.rows) ?? [], [q.data])
   const total = q.data?.pages[0]?.total ?? 0
@@ -54,6 +56,7 @@ export function TrashPage() {
         selection.clear()
         setDialog(null)
       } else {
+        await requirePin('Enter your PIN to empty the Trash permanently.')
         setProgress(0)
         const { deleted, error } = await emptyTrash(setProgress)
         for (const key of ['trash', 'trashCount', 'stats', 'documents', 'recent']) qc.invalidateQueries({ queryKey: [key] })

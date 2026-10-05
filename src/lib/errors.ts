@@ -12,14 +12,27 @@ const AUTH_MESSAGES: Record<string, string> = {
   session_not_found: 'Your session has expired. Sign in again.',
 }
 
+export class PinCancelledError extends AppError {
+  constructor() { super('Cancelled. The PIN was not entered.') }
+}
+
+const PIN_MESSAGES: [RegExp, string][] = [
+  [/PIN_REQUIRED/, 'Enter your PIN to continue, then try again.'],
+  [/PIN_INVALID/, 'Choose a 6-digit PIN that is not a simple pattern like 123456 or 111111.'],
+  [/PIN_EXISTS/, 'A PIN is already set. Use Change PIN instead.'],
+  [/RECENT_LOGIN_REQUIRED/, 'For safety, sign in again and then retry within two minutes.'],
+]
+
 export function toMessage(err: unknown, fallback = 'Something went wrong. Please try again.'): string {
   if (err instanceof AppError) return err.message
+  const raw = typeof err === 'object' && err !== null ? String((err as { message?: string }).message ?? '') : ''
+  for (const [re, msg] of PIN_MESSAGES) if (re.test(raw)) return msg
   if (typeof err === 'object' && err !== null) {
     const e = err as { code?: string; name?: string; message?: string; status?: number }
     if (e.code && AUTH_MESSAGES[e.code]) return AUTH_MESSAGES[e.code]
     // PostgREST: a function or table the app expects is missing, i.e. a migration hasn't been run yet.
     if (e.code === 'PGRST202' || e.code === 'PGRST205') {
-      return 'The database is missing an update. In the Supabase SQL editor, run the files in supabase/migrations in order (0001 to 0005), then reload.'
+      return 'The database is missing an update. In the Supabase SQL editor, run the files in supabase/migrations in order (0001 to 0006), then reload.'
     }
     if (e.name === 'AuthRetryableFetchError' || /failed to fetch|network/i.test(e.message ?? '')) {
       return 'Network problem. Check your connection and try again.'

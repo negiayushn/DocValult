@@ -73,6 +73,11 @@ Deno.serve(async (req) => {
   if (userErr || !userData.user) return json(req, { error: 'Your session has expired. Sign in again.' }, 401)
   const uid = userData.user.id
 
+  // If the user has a PIN, it must have been entered in the last 5 minutes (checked by the database as THAT user).
+  const { data: pinOk, error: pinErr } = await asUser.rpc('pin_recent')
+  if (pinErr) return json(req, { error: 'Could not check your PIN. Try again.' }, 500)
+  if (pinOk !== true) return json(req, { error: 'PIN_REQUIRED' }, 403)
+
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
   try {
     // 1. Storage objects first (the API is the only supported way to delete them).

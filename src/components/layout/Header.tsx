@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bell, LogOut, Search, Settings } from 'lucide-react'
+import { Bell, Lock, LogOut, Search, Settings } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Logo } from '@/components/ui/Logo'
 import { useToast } from '@/components/ui/Toast'
 import { UploadButton } from '@/components/upload/UploadButton'
 import { useAuth } from '@/hooks/useAuth'
 import { useAvatarUrl, useProfile } from '@/hooks/useProfile'
+import { usePin } from '@/hooks/usePin'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { signOut } from '@/services/auth'
@@ -45,6 +46,7 @@ export function Header() {
   const { user } = useAuth()
   const { data: profile } = useProfile()
   const { data: avatarUrl } = useAvatarUrl()
+  const { hasPin, lockNow } = usePin()
   const location = useLocation()
   const [params] = useSearchParams()
   const [q, setQ] = useState(() => (location.pathname === '/documents' ? params.get('q') ?? '' : ''))
@@ -103,6 +105,11 @@ export function Header() {
       </form>
       <div className="ml-auto flex items-center gap-1">
         <div className="mr-2 hidden md:block"><UploadButton /></div>
+        {hasPin && (
+          <button onClick={lockNow} aria-label="Lock now" title="Lock now" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-fg">
+            <Lock className="h-5 w-5" aria-hidden />
+          </button>
+        )}
         <Popover icon={<Bell className="h-5 w-5" />} label="Notifications">
           <p className="px-3 py-4 text-center text-sm text-muted">You're all caught up.</p>
         </Popover>

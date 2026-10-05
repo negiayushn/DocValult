@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { useToast } from '@/components/ui/Toast'
+import { usePin } from '@/hooks/usePin'
 import { toMessage } from '@/lib/errors'
 import { deletePermanently, moveDocuments, renameDocument, restoreDocuments, setFavorite, softDeleteDocuments } from '@/services/documents'
 import { createFolder, deleteFolder, moveFolder, renameFolder } from '@/services/folders'
@@ -12,6 +13,7 @@ type DocPage = { rows: VaultDocument[]; total: number }
 export function useExplorerActions() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { requirePin } = usePin()
 
   const refreshDocs = useCallback(() => {
     for (const key of ['documents', 'document', 'stats', 'recent', 'folderCounts', 'trash', 'trashCount']) qc.invalidateQueries({ queryKey: [key] })
@@ -32,6 +34,7 @@ export function useExplorerActions() {
       toast.success(docs.length === 1 ? 'Document moved' : `${docs.length} documents moved`)
     },
     async trashDocs(ids: string[]) {
+      await requirePin(ids.length === 1 ? 'Enter your PIN to move this document to Trash.' : `Enter your PIN to move ${ids.length} documents to Trash.`)
       await softDeleteDocuments(ids)
       refreshDocs()
       toast.success(ids.length === 1 ? 'Moved to Trash' : `${ids.length} documents moved to Trash`)
@@ -42,6 +45,7 @@ export function useExplorerActions() {
       toast.success(docs.length === 1 ? 'Document restored' : `${docs.length} documents restored`)
     },
     async deleteForever(ids: string[]) {
+      await requirePin(ids.length === 1 ? 'Enter your PIN to delete this document permanently.' : `Enter your PIN to delete ${ids.length} documents permanently.`)
       const n = await deletePermanently(ids)
       refreshDocs()
       toast.success(n === 1 ? 'Deleted permanently' : `${n} documents deleted permanently`)
@@ -76,9 +80,10 @@ export function useExplorerActions() {
       toast.success('Folder moved')
     },
     async deleteFolder(folder: Folder) {
+      await requirePin(`Enter your PIN to delete the folder "${folder.name}".`)
       await deleteFolder(folder.id)
       refreshFolders()
       toast.success('Folder deleted')
     },
-  }), [qc, toast, refreshDocs, refreshFolders])
+  }), [qc, toast, requirePin, refreshDocs, refreshFolders])
 }

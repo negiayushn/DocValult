@@ -1,8 +1,10 @@
 import { supabase, REMEMBER_KEY } from '@/lib/supabase'
 import { AppError } from '@/lib/errors'
+import { clearActive } from '@/lib/pinSession'
 
 export async function signIn(email: string, password: string, remember: boolean) {
   localStorage.setItem(REMEMBER_KEY, String(remember))
+  clearActive() // a fresh login always asks for the PIN
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
   return data
@@ -19,6 +21,7 @@ export async function signUp(displayName: string, email: string, password: strin
 }
 
 export async function signOut() {
+  clearActive()
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
@@ -49,6 +52,7 @@ export async function deleteAccount() {
     const ctx = (error as { context?: Response }).context
     let message: string | undefined
     try { message = ctx ? ((await ctx.json()) as { error?: string }).error : undefined } catch { /* ignore */ }
+    if (ctx && ctx.status === 403 && message === 'PIN_REQUIRED') message = 'Enter your PIN to continue, then try again.'
     if (ctx && ctx.status === 404) message = 'Account deletion is not set up yet. Deploy the delete-account function (see README).'
     throw new AppError(message ?? 'Could not delete the account. Check your connection and try again.')
   }

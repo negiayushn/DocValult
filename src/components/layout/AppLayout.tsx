@@ -11,10 +11,12 @@ import { UploadQueuePanel } from '@/components/upload/UploadQueuePanel'
 import { UploadFab } from '@/components/upload/UploadButton'
 import { SchemaBanner } from './SchemaBanner'
 import { OfflineBanner } from './OfflineBanner'
+import { PinProvider } from '@/hooks/usePin'
 
 export function AppLayout() {
   const { pathname } = useLocation()
   return (
+    <PinProvider>
     <UploadProvider>
     <div className="flex h-full">
       <Sidebar />
@@ -38,5 +40,6 @@ export function AppLayout() {
       <DropOverlay />
     </div>
     </UploadProvider>
+    </PinProvider>
   )
 }

@@ -30,9 +30,15 @@ checks as (
   union all select 'anon cannot execute public.' || p.proname,
     not has_function_privilege('anon', p.oid, 'execute')
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname='public' and p.prokind='f' and p.proname not in ('handle_new_user','set_updated_at','touch_updated_at')
+    where n.nspname='public' and p.prokind='f' and p.proname not in ('handle_new_user','set_updated_at','touch_updated_at','guard_pin')
     and not exists (select 1 from pg_trigger t where t.tgfoid = p.oid)
-  union all select 'database schema version is at least 5',
-    (select public.vault_schema_version()) >= 5
+  union all select 'user_pins is sealed: authenticated has no table privileges',
+    not exists (select 1 from information_schema.role_table_grants where table_schema='public' and table_name='user_pins' and grantee in ('anon','authenticated','public'))
+  union all select 'PIN guard triggers installed on documents and folders',
+    (select count(*) from pg_trigger where tgname in ('documents_guard_trash','documents_guard_delete','folders_guard_delete') and not tgisinternal) = 3
+  union all select 'storage delete policy for documents requires the PIN check',
+    exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='documents_objects_delete_own' and qual like '%pin_recent%')
+  union all select 'database schema version is at least 6',
+    (select public.vault_schema_version()) >= 6
 )
 select case when ok then 'PASS' else 'FAIL' end as result, name from checks order by ok, name;
