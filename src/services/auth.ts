@@ -1,4 +1,5 @@
 import { supabase, REMEMBER_KEY } from '@/lib/supabase'
+import { AppError } from '@/lib/errors'
 
 export async function signIn(email: string, password: string, remember: boolean) {
   localStorage.setItem(REMEMBER_KEY, String(remember))
@@ -38,4 +39,19 @@ export async function updatePassword(password: string) {
 export async function verifyCurrentPassword(email: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
+}
+
+/** Permanently deletes the account and every file, via the `delete-account` Edge Function (service role lives only there). */
+export async function deleteAccount() {
+  const { data, error } = await supabase.functions.invoke('delete-account', { method: 'POST' })
+  if (error) {
+    // supabase-js hides the server's message inside error.context (a Response).
+    const ctx = (error as { context?: Response }).context
+    let message: string | undefined
+    try { message = ctx ? ((await ctx.json()) as { error?: string }).error : undefined } catch { /* ignore */ }
+    if (ctx && ctx.status === 404) message = 'Account deletion is not set up yet. Deploy the delete-account function (see README).'
+    throw new AppError(message ?? 'Could not delete the account. Check your connection and try again.')
+  }
+  if ((data as { error?: string } | null)?.error) throw new AppError((data as { error: string }).error)
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
 }

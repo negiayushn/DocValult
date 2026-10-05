@@ -1,11 +1,14 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Bell, LogOut, Search, Settings, User } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Bell, LogOut, Search, Settings } from 'lucide-react'
+import { Avatar } from '@/components/ui/Avatar'
 import { Logo } from '@/components/ui/Logo'
 import { useToast } from '@/components/ui/Toast'
+import { UploadButton } from '@/components/upload/UploadButton'
 import { useAuth } from '@/hooks/useAuth'
-import { useProfile } from '@/hooks/useProfile'
+import { useAvatarUrl, useProfile } from '@/hooks/useProfile'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { signOut } from '@/services/auth'
 import { queryClient } from '@/lib/queryClient'
 import { toMessage } from '@/lib/errors'
@@ -41,11 +44,32 @@ export function Header() {
   const toast = useToast()
   const { user } = useAuth()
   const { data: profile } = useProfile()
-  const [q, setQ] = useState('')
+  const { data: avatarUrl } = useAvatarUrl()
+  const location = useLocation()
+  const [params] = useSearchParams()
+  const [q, setQ] = useState(() => (location.pathname === '/documents' ? params.get('q') ?? '' : ''))
+  const debounced = useDebouncedValue(q, 300)
+  const lastNavigated = useRef(debounced.trim())
+
+  // Live search: results update ~300 ms after you stop typing.
+  useEffect(() => {
+    const term = debounced.trim()
+    if (term === lastNavigated.current) return
+    lastNavigated.current = term
+    if (term) navigate(`/documents?q=${encodeURIComponent(term)}`, { replace: location.pathname === '/documents' })
+    else if (location.pathname === '/documents') navigate('/documents', { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced])
+
+  // Clear the box when you leave the search results.
+  useEffect(() => {
+    if (location.pathname !== '/documents') { setQ(''); lastNavigated.current = '' }
+  }, [location.pathname])
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault()
     const term = q.trim()
+    lastNavigated.current = term
     navigate(term ? `/documents?q=${encodeURIComponent(term)}` : '/documents')
   }
 
@@ -78,10 +102,11 @@ export function Header() {
         />
       </form>
       <div className="ml-auto flex items-center gap-1">
+        <div className="mr-2 hidden md:block"><UploadButton /></div>
         <Popover icon={<Bell className="h-5 w-5" />} label="Notifications">
           <p className="px-3 py-4 text-center text-sm text-muted">You're all caught up.</p>
         </Popover>
-        <Popover icon={<User className="h-5 w-5" />} label="Account menu">
+        <Popover icon={<Avatar url={avatarUrl} name={name} className="h-8 w-8 text-xs" />} label="Account menu">
           <div className="border-b border-line px-3 pb-2 pt-1">
             <p className="truncate text-sm font-semibold">{name}</p>
             <p className="truncate text-xs text-muted">{user?.email}</p>

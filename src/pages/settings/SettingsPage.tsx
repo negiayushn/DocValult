@@ -1,16 +1,21 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Laptop, LogOut, Moon, Sun } from 'lucide-react'
+import { Camera, Laptop, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { Avatar } from '@/components/ui/Avatar'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/hooks/useAuth'
-import { useProfile, useUpdateDisplayName } from '@/hooks/useProfile'
+import { useAvatarMutations, useAvatarUrl, useProfile, useUpdateDisplayName } from '@/hooks/useProfile'
 import { useTheme, type ThemeChoice } from '@/hooks/useTheme'
-import { signOut, updatePassword, verifyCurrentPassword } from '@/services/auth'
+import { useInstallPrompt } from '@/hooks/useInstallPrompt'
+import { useSchemaVersion } from '@/hooks/useSchemaVersion'
+import { deleteAccount, signOut, updatePassword, verifyCurrentPassword } from '@/services/auth'
+import { validateAvatar } from '@/services/profile'
 import { queryClient } from '@/lib/queryClient'
 import { toMessage } from '@/lib/errors'
 import { cn } from '@/lib/cn'
@@ -23,6 +28,52 @@ function Section({ title, description, children }: { title: string; description?
       {description && <p className="mt-1 text-sm text-muted">{description}</p>}
       <div className="mt-5">{children}</div>
     </Card>
+  )
+}
+
+function AvatarEditor({ name }: { name: string }) {
+  const toast = useToast()
+  const { data: profile } = useProfile()
+  const { data: url } = useAvatarUrl()
+  const { upload, remove } = useAvatarMutations()
+  const input = useRef<HTMLInputElement>(null)
+  const busy = upload.isPending || remove.isPending
+
+  const onPick = async (file: File | undefined) => {
+    if (input.current) input.current.value = '' // allow picking the same file again
+    if (!file) return
+    const problem = validateAvatar(file)
+    if (problem) return toast.error(problem)
+    try {
+      await upload.mutateAsync(file)
+      toast.success('Picture updated')
+    } catch (err) {
+      toast.error(toMessage(err, 'Could not upload your picture.'))
+    }
+  }
+  const onRemove = async () => {
+    try {
+      await remove.mutateAsync()
+      toast.success('Picture removed')
+    } catch (err) {
+      toast.error(toMessage(err, 'Could not remove your picture.'))
+    }
+  }
+
+  return (
+    <div className="mb-6 flex items-center gap-4">
+      <Avatar url={url} name={name} className="h-20 w-20 text-xl" />
+      <div className="flex flex-wrap gap-2">
+        <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label="Choose a profile picture" tabIndex={-1} onChange={(e) => onPick(e.target.files?.[0])} />
+        <Button variant="secondary" size="sm" loading={upload.isPending} disabled={busy} onClick={() => input.current?.click()}>
+          <Camera className="h-4 w-4" aria-hidden /> {profile?.avatar_url ? 'Change picture' : 'Add picture'}
+        </Button>
+        {profile?.avatar_url && (
+          <Button variant="ghost" size="sm" loading={remove.isPending} disabled={busy} onClick={onRemove}>Remove</Button>
+        )}
+        <p className="basis-full text-xs text-muted">PNG, JPG or WebP, up to 2 MB.</p>
+      </div>
+    </div>
   )
 }
 
@@ -55,11 +106,14 @@ function ProfileSection() {
       ) : isError ? (
         <p className="text-sm text-danger">Could not load your profile. Refresh and try again.</p>
       ) : (
+        <>
+        <AvatarEditor name={profile?.display_name || user?.email?.split('@')[0] || 'Account'} />
         <form onSubmit={onSubmit} className="max-w-md space-y-4" noValidate>
           <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} error={error} />
           <Input label="Email" value={user?.email ?? ''} readOnly disabled hint="Your email is your sign-in and can't be changed here." />
           <Button type="submit" loading={update.isPending}>Save changes</Button>
         </form>
+        </>
       )}
     </Section>
   )
@@ -157,6 +211,96 @@ function AppearanceSection() {
   )
 }
 
+function AppSection() {
+  const { canInstall, installed, install } = useInstallPrompt()
+  return (
+    <Section title="Install app" description="Add Personal Vault to your home screen or desktop for one-tap access.">
+      {installed ? (
+        <p className="text-sm font-medium text-success">Installed on this device.</p>
+      ) : canInstall ? (
+        <Button variant="secondary" onClick={install}>Install Personal Vault</Button>
+      ) : (
+        <p className="text-sm text-muted">Your browser has not offered installation. On iPhone, tap Share, then Add to Home Screen. On Chrome or Edge, use the install icon in the address bar once you are on the deployed site.</p>
+      )}
+    </Section>
+  )
+}
+
+function DatabaseSection() {
+  const { data, isLoading, isError, outdated, required, refetch, isFetching } = useSchemaVersion()
+  return (
+    <Section title="Database" description="Whether your Supabase database has every update this version of the app needs.">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        {isLoading ? <Skeleton className="h-6 w-40" /> : isError ? (
+          <span className="text-danger">Couldn't check. Check your connection and try again.</span>
+        ) : outdated ? (
+          <span className="font-medium text-danger">Out of date: version {data}, needs {required}. Run supabase/catch_up.sql in the Supabase SQL editor.</span>
+        ) : (
+          <span className="font-medium text-success">Up to date (version {data}).</span>
+        )}
+        <Button variant="secondary" size="sm" loading={isFetching} onClick={() => refetch()}>Check again</Button>
+      </div>
+    </Section>
+  )
+}
+
+function DangerSection() {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const { user } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [typed, setTyped] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const close = () => { if (!busy) { setOpen(false); setPassword(''); setTyped(''); setError(null) } }
+
+  const onDelete = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (typed.trim() !== 'DELETE') return setError('Type DELETE to confirm.')
+    if (!password) return setError('Enter your password.')
+    setBusy(true)
+    try {
+      await verifyCurrentPassword(user!.email!, password)
+    } catch {
+      setBusy(false)
+      return setError('Your password is incorrect.')
+    }
+    try {
+      await deleteAccount()
+      queryClient.clear()
+      navigate('/login', { replace: true })
+      toast.success('Your account and all files were deleted.')
+    } catch (err) {
+      setError(toMessage(err, 'Could not delete your account. Please try again.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="border-danger/40 p-5 sm:p-6">
+      <h2 className="text-base font-semibold text-danger">Delete account</h2>
+      <p className="mt-1 text-sm text-muted">Permanently deletes your account, folders, tags and every file. This cannot be undone.</p>
+      <Button className="mt-4" variant="danger" onClick={() => setOpen(true)}><Trash2 className="h-4 w-4" aria-hidden /> Delete my account</Button>
+      <Modal open={open} title="Delete your account?" onClose={close} busy={busy}>
+        <form onSubmit={onDelete} className="space-y-4" noValidate>
+          <p className="text-sm text-muted">Everything in your vault will be erased for good. Download anything you want to keep first.</p>
+          <Input label="Your password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input label="Type DELETE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={close} disabled={busy}>Cancel</Button>
+            <Button type="submit" variant="danger" loading={busy}>Delete everything</Button>
+          </div>
+        </form>
+      </Modal>
+    </Card>
+  )
+}
+
 export function SettingsPage() {
   return (
     <>
@@ -165,6 +309,9 @@ export function SettingsPage() {
         <ProfileSection />
         <SecuritySection />
         <AppearanceSection />
+        <AppSection />
+        <DatabaseSection />
+        <DangerSection />
       </div>
     </>
   )

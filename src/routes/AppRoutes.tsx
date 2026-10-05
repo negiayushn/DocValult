@@ -8,7 +8,9 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
-const DocumentsPage = lazy(() => import('@/pages/documents/DocumentsPage').then((m) => ({ default: m.DocumentsPage })))
+const ExplorerPage = lazy(() => import('@/pages/documents/ExplorerPage').then((m) => ({ default: m.ExplorerPage })))
+const DocumentsRoute = lazy(() => import('@/pages/documents/DocumentsRoute').then((m) => ({ default: m.DocumentsRoute })))
+const DocumentDetailPage = lazy(() => import('@/pages/documents/DocumentDetailPage').then((m) => ({ default: m.DocumentDetailPage })))
 const RecentPage = lazy(() => import('@/pages/documents/RecentPage').then((m) => ({ default: m.RecentPage })))
 const FoldersPage = lazy(() => import('@/pages/folders/FoldersPage').then((m) => ({ default: m.FoldersPage })))
 const FavoritesPage = lazy(() => import('@/pages/favorites/FavoritesPage').then((m) => ({ default: m.FavoritesPage })))
@@ -29,9 +31,11 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="documents" element={<DocumentsRoute />} />
+          <Route path="documents/:documentId" element={<DocumentDetailPage />} />
           <Route path="recent" element={<RecentPage />} />
           <Route path="folders" element={<FoldersPage />} />
+          <Route path="folders/:folderId" element={<ExplorerPage />} />
           <Route path="favorites" element={<FavoritesPage />} />
           <Route path="trash" element={<TrashPage />} />
           <Route path="storage" element={<StoragePage />} />
