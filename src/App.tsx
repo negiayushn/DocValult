@@ -5,6 +5,7 @@ import { AuthProvider } from '@/hooks/useAuth'
 import { ThemeProvider } from '@/hooks/useTheme'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AppRoutes } from '@/routes/AppRoutes'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function App() {
   return (
@@ -13,7 +14,9 @@ export default function App() {
         <ToastProvider>
           <AuthProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <ErrorBoundary fullPage>
+                <AppRoutes />
+              </ErrorBoundary>
             </BrowserRouter>
           </AuthProvider>
         </ToastProvider>

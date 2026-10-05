@@ -4,8 +4,8 @@
  * offline message. It never touches Supabase: those requests are cross-origin and are ignored here,
  * so documents, signed URLs and API responses are never stored by the service worker.
  */
-const SHELL = 'vault-shell-v1'
-const PRECACHE = ['/', '/favicon.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
+const SHELL = 'vault-shell-v2'
+const PRECACHE = ['/', '/theme-init.js', '/favicon.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()))

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { SUPABASE_KEY, SUPABASE_URL } from '@/lib/env'
 import { AppError } from '@/lib/errors'
 import { DOCUMENTS_BUCKET, SIGNED_URL_TTL_SECONDS } from '@/lib/config'
 import { sanitizeForStorage } from '@/utils/fileNames'
@@ -24,7 +25,7 @@ export async function uploadWithProgress(path: string, file: File, mime: string,
   const token = data.session?.access_token
   if (!token) throw new AppError('Your session has expired. Sign in again.')
 
-  const base = import.meta.env.VITE_SUPABASE_URL.replace(/\/$/, '')
+  const base = SUPABASE_URL!.replace(/\/$/, '')
   const url = `${base}/storage/v1/object/${DOCUMENTS_BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`
 
   await new Promise<void>((resolve, reject) => {
@@ -35,7 +36,7 @@ export async function uploadWithProgress(path: string, file: File, mime: string,
 
     xhr.open('POST', url)
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-    xhr.setRequestHeader('apikey', import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)
+    xhr.setRequestHeader('apikey', SUPABASE_KEY!)
     xhr.setRequestHeader('x-upsert', 'false')
     xhr.setRequestHeader('cache-control', 'max-age=3600')
     xhr.setRequestHeader('Content-Type', mime)

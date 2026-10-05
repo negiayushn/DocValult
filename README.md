@@ -12,7 +12,7 @@ A private document vault: React + TypeScript + Vite + Tailwind on the front, Sup
 | 4 | Dashboard, file explorer, folders | Done |
 | 5 | Search, favorites page, recent, trash, preview | Done |
 | 6 | Storage page, avatar, delete account, mobile polish, PWA | Done |
-| 7 | Security review, performance, deploy | Next |
+| 7 | Security review, performance, error handling, deploy docs | Done |
 
 Routes for later phases already exist behind the auth guard and show an empty state. No mock data is used anywhere.
 
@@ -45,9 +45,22 @@ For a personal vault, consider turning off public signups (Authentication -> Pro
 - The `documents` bucket is private; files are served through short-lived signed URLs (TTL in `src/lib/config.ts`).
 - File size limit and allowed MIME types are enforced in the bucket and must be kept in sync with `src/lib/config.ts`.
 
-## Deploy (Vercel)
+## Deploy (Vercel + Supabase)
 
-Import the repo, framework preset Vite, add the two `VITE_` env vars, deploy. Add `vercel.json` with a rewrite of all paths to `/index.html` for client-side routing (added in phase 7).
+1. Push the project to a private GitHub repo (`.env` must not be committed).
+2. Vercel -> Add New -> Project -> import the repo. Framework: Vite (build `npm run build`, output `dist`).
+3. Environment variables (Production, Preview and Development). Either use the names from `.env.example`:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+   or connect the Supabase integration, which creates `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; the app accepts those too. Only these public values are ever read by the browser build. Variables like `SUPABASE_SERVICE_ROLE_KEY` are not exposed.
+4. **Variables are baked in at build time.** After adding or changing any, redeploy (Deployments -> ... -> Redeploy). Without them the site shows a "needs its Supabase settings" page.
+5. Supabase -> Authentication -> URL Configuration: Site URL = your Vercel URL; add `https://your-app.vercel.app/**` (and `http://localhost:5173/**`) to Redirect URLs.
+6. Supabase SQL editor: run `supabase/catch_up.sql` (or 0001 then 0002-0005). Check Settings -> Database says version 5.
+7. Optional: deploy the `delete-account` function (section above) and turn off public signups.
+
+`vercel.json` (included) rewrites every path to `index.html`, sets a strict Content-Security-Policy and other security headers, and long-caches hashed assets.
+The CSP allows `https://*.supabase.co` for API, Storage, images and PDF previews. If you use a custom Supabase domain, add it to `connect-src`, `img-src` and `frame-src` in `vercel.json`.
 
 ## Verify phase 3
 
@@ -118,3 +131,35 @@ Run `0005_phase6.sql` (or `catch_up.sql`) first. Settings -> Database should rea
 - `public/sw.js` caches only the static shell (HTML, JS, CSS, icons). Supabase requests, signed URLs and documents are cross-origin and are never cached.
 - It registers in production builds only (`npm run build && npm run preview` to try it). After a deploy, the new version is picked up on the next page load.
 - Icons are in `public/` (`icon-192.png`, `icon-512.png`, `maskable-512.png`, `apple-touch-icon.png`).
+
+## Security checks (phase 7)
+
+- `supabase/tests/production_check.sql`: **read-only**, safe on your real project. Run it in the SQL editor; every row must say PASS (RLS enabled and forced, buckets private, storage policies present, no anonymous access, functions pinned, schema version).
+- `supabase/tests/security_audit.sql`: a two-user attack simulation (92 checks: reading, editing, deleting, forging ids, moving into another user's folder, tagging another user's file, storage prefixes, anonymous access, RPC isolation). **Run it only on a local or scratch database** (for example `supabase start`), never on production. Last line must read `0 FAILED`.
+- App-level checks to do by hand with two accounts (A and B):
+  1. A uploads a file. Signed in as B, paste `/documents/<A's document id>`: "Document not found".
+  2. Copy a signed URL from A, wait 5 minutes: it stops working. A signed-out browser can't open it either.
+  3. In the browser dev tools Network tab, no request carries a service-role key; search the built JS for `service_role`: nothing.
+  4. In Supabase Table Editor, every table shows RLS enabled.
+  5. B cannot see A's folders, tags, search results, storage totals or avatar.
+  6. Wrong file types and files over 50 MB are rejected in the app and by the bucket.
+  7. Sign out, press Back: you stay on the login page.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| "needs its Supabase settings" page | Env vars missing in this build. Add them in Vercel and redeploy. |
+| Page refresh gives 404 on Vercel | `vercel.json` missing from the repo root. |
+| Email links go to localhost | Supabase Site URL / Redirect URLs not set to your Vercel URL. |
+| "database is missing an update" or "out of date" banner | Run `supabase/catch_up.sql`. |
+| Folder creation fails with HTTP 500 | Migration 0003 not applied. |
+| Preview or images blank on the live site only | CSP blocks your Supabase domain; see the note above. |
+| Delete account says "not set up yet" | Deploy the `delete-account` Edge Function. |
+| Old version still showing after deploy | Close all tabs of the site once; the service worker updates on the next load. |
+
+## Performance notes
+
+- Routes are lazy-loaded; vendor code (React, Supabase, TanStack Query) is split into separate cached chunks, so app updates re-download about 60 KB instead of the whole bundle.
+- Lists load 30 at a time (infinite query); thumbnails are lazy; signed URLs are created on demand, not in bulk.
+- Server work uses indexed queries and single-round-trip RPCs (dashboard, folder counts, search, storage breakdown).

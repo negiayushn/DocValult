@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { MobileNav } from './MobileNav'
@@ -12,6 +13,7 @@ import { SchemaBanner } from './SchemaBanner'
 import { OfflineBanner } from './OfflineBanner'
 
 export function AppLayout() {
+  const { pathname } = useLocation()
   return (
     <UploadProvider>
     <div className="flex h-full">
@@ -22,9 +24,11 @@ export function AppLayout() {
         <SchemaBanner />
         <main className="flex-1 overflow-y-auto px-4 py-6 pb-24 md:px-8 md:pb-8">
           <div className="mx-auto w-full max-w-6xl">
-            <Suspense fallback={<FullPageSpinner />}>
-              <Outlet />
-            </Suspense>
+            <ErrorBoundary resetKey={pathname}>
+              <Suspense fallback={<FullPageSpinner />}>
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

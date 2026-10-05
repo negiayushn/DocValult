@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const ExplorerPage = lazy(() => import('@/pages/documents/ExplorerPage').then((m) => ({ default: m.ExplorerPage })))
@@ -40,6 +41,7 @@ export function AppRoutes() {
           <Route path="trash" element={<TrashPage />} />
           <Route path="storage" element={<StoragePage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
