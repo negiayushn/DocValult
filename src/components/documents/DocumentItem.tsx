@@ -1,4 +1,5 @@
-import { Download, ExternalLink, FolderInput, Pencil, Star, Trash2 } from 'lucide-react'
+import { Download, ExternalLink, FolderInput, Pencil, Share2, Star, Trash2 } from 'lucide-react'
+import { useShare } from '@/hooks/useShare'
 import { FileTypeIcon } from './FileTypeIcon'
 import { SelectCheckbox } from './SelectCheckbox'
 import { Menu, type MenuItem } from '@/components/ui/Menu'
@@ -30,9 +31,11 @@ interface Props extends DocumentHandlers {
 }
 
 export function DocumentItem({ doc, view, selected, onToggle, thumbUrl, subtitle, highlight, ...h }: Props) {
+  const { share } = useShare()
   const items: MenuItem[] = [
     { label: 'Open', icon: ExternalLink, onSelect: () => h.onOpen(doc) },
     { label: 'Download', icon: Download, onSelect: () => h.onDownload(doc) },
+    { label: 'Share', icon: Share2, onSelect: () => share(doc) },
     { label: doc.is_favorite ? 'Remove from favorites' : 'Add to favorites', icon: Star, onSelect: () => h.onFavorite(doc) },
     { label: 'Rename', icon: Pencil, onSelect: () => h.onRename(doc), separatorBefore: true },
     { label: 'Move', icon: FolderInput, onSelect: () => h.onMove(doc) },

@@ -12,11 +12,13 @@ import { UploadFab } from '@/components/upload/UploadButton'
 import { SchemaBanner } from './SchemaBanner'
 import { OfflineBanner } from './OfflineBanner'
 import { PinProvider } from '@/hooks/usePin'
+import { ShareProvider } from '@/hooks/useShare'
 
 export function AppLayout() {
   const { pathname } = useLocation()
   return (
     <PinProvider>
+    <ShareProvider>
     <UploadProvider>
     <div className="flex h-full">
       <Sidebar />
@@ -40,6 +42,7 @@ export function AppLayout() {
       <DropOverlay />
     </div>
     </UploadProvider>
+    </ShareProvider>
     </PinProvider>
   )
 }

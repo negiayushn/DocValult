@@ -14,6 +14,7 @@ A private document vault: React + TypeScript + Vite + Tailwind on the front, Sup
 | 6 | Storage page, avatar, delete account, mobile polish, PWA | Done |
 | 7 | Security review, performance, error handling, deploy docs | Done |
 | 8 | 6-digit PIN lock, strict PIN window for permanent deletes, server-side lock | Done |
+| 9 | Share documents (link, WhatsApp, Telegram, email, native share sheet) | Done |
 
 Routes for later phases already exist behind the auth guard and show an empty state. No mock data is used anywhere.
 
@@ -149,6 +150,16 @@ How strong is it? Be honest about the limits:
 - Password-based PIN reset relies on the sign-in method in the Supabase session token. Test it once on your real project.
 
 Tests: `supabase/tests/pin_audit.sql` (74 checks, local or scratch database only).
+
+## Sharing (phase 9)
+
+No SQL or Edge Function changes are required. Open a document's menu or detail page and choose **Share**.
+
+- **Create link**: choose an expiry (1 hour, 1 day or 7 days), then copy or send it with WhatsApp, Telegram or Email. For other apps, copy and paste the link.
+- **Send the file itself**: on supported browsers and devices, opens the system share sheet with the file attached (up to 50 MB).
+- If a PIN is set, creating a link or sending the file asks for it first.
+
+Anyone with a signed link can open the private file without signing in until it expires. A link cannot be cancelled early; permanently deleting the file makes the link stop working.
 
 ## PWA notes
 

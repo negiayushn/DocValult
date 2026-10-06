@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Download, FileSearch, FolderInput, Pencil, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, FileSearch, FolderInput, Pencil, Share2, Star, Trash2 } from 'lucide-react'
+import { useShare } from '@/hooks/useShare'
 import { Breadcrumbs } from '@/components/documents/Breadcrumbs'
 import { DocumentPreview } from '@/components/documents/DocumentPreview'
 import { DocumentDialogs, type DocumentDialogState } from '@/components/documents/DocumentDialogs'
@@ -39,6 +40,7 @@ export function DocumentDetailPage() {
   const qc = useQueryClient()
   const actions = useExplorerActions()
   const { download } = useDocumentActions()
+  const { share } = useShare()
   const docQ = useDocument(documentId)
   const foldersQ = useFolders()
   const doc = docQ.data
@@ -86,6 +88,7 @@ export function DocumentDetailPage() {
             <h2 className="mb-3 text-sm font-semibold">Actions</h2>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => download(doc)}><Download className="h-4 w-4" aria-hidden /> Download</Button>
+              <Button variant="secondary" onClick={() => share(doc)}><Share2 className="h-4 w-4" aria-hidden /> Share</Button>
               <Button variant="secondary" onClick={() => setDialog({ kind: 'renameDoc', doc })}><Pencil className="h-4 w-4" aria-hidden /> Rename</Button>
               <Button variant="secondary" onClick={() => setDialog({ kind: 'moveDocs', docs: [doc] })}><FolderInput className="h-4 w-4" aria-hidden /> Move</Button>
               <Button variant="secondary" onClick={() => { void actions.toggleFavorite(doc) }} aria-pressed={doc.is_favorite}><Star className={`h-4 w-4 ${doc.is_favorite ? 'fill-current text-amber-500' : ''}`} aria-hidden /> {doc.is_favorite ? 'Favorited' : 'Favorite'}</Button>
