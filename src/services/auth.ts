@@ -1,3 +1,4 @@
+import { pinLockNow } from '@/services/pin'
 import { supabase, REMEMBER_KEY } from '@/lib/supabase'
 import { AppError } from '@/lib/errors'
 import { clearActive } from '@/lib/pinSession'
@@ -22,6 +23,11 @@ export async function signUp(displayName: string, email: string, password: strin
 
 export async function signOut() {
   clearActive()
+  try {
+    await pinLockNow()
+  } catch (error) {
+    console.error('Could not end the server-side PIN window before sign out', error)
+  }
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }

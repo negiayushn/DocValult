@@ -4,12 +4,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { LockScreen } from '@/components/pin/LockScreen'
 import { PinPrompt } from '@/components/pin/PinPrompt'
-import { getPinStatus, type PinStatus } from '@/services/pin'
+import { getPinStatus, pinLockNow, type PinStatus } from '@/services/pin'
 import { clearActive, readActiveAt, touchActive } from '@/lib/pinSession'
-import { PinCancelledError } from '@/lib/errors'
+import { PinCancelledError, toMessage } from '@/lib/errors'
 
 /** The browser trusts a verified PIN for 4 minutes; the database trusts it for 5, so the two never disagree. */
 const SENSITIVE_MS = 4 * 60_000
+/** Permanent deletes need a PIN entered in the last 25 seconds (the server allows 30). */
+const STRICT_MS = 25_000
 
 type View = 'loading' | 'locked' | 'open' | 'error'
 
@@ -17,7 +19,7 @@ interface PinContextValue {
   status: PinStatus | undefined
   hasPin: boolean
   /** Resolves immediately when no PIN is set or it was entered recently; otherwise asks, and rejects if cancelled. */
-  requirePin: (reason: string) => Promise<void>
+  requirePin: (reason: string, opts?: { strict?: boolean }) => Promise<void>
   lockNow: () => void
   /** Call after the user has just proven the PIN (for example right after setting or changing it). */
   markVerified: () => void
@@ -37,6 +39,7 @@ export function PinProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('loading')
   const [prompt, setPrompt] = useState<string | null>(null)
   const sensitiveUntil = useRef(0)
+  const strictUntil = useRef(0)
   const statusRef = useRef<PinStatus | undefined>(undefined)
   statusRef.current = status
   const pending = useRef<{ promise: Promise<void>; resolve: () => void; reject: (e: unknown) => void } | null>(null)
@@ -60,6 +63,7 @@ export function PinProvider({ children }: { children: ReactNode }) {
     if (stillActive) {
       setView('open')
       if (status.verifiedSeconds > 0) sensitiveUntil.current = Date.now() + Math.min(status.verifiedSeconds * 1000, SENSITIVE_MS)
+      if (status.strictSeconds > 0) strictUntil.current = Date.now() + Math.min(status.strictSeconds * 1000, STRICT_MS)
     } else setView('locked')
   }, [status, q.isError, q.error])
 
@@ -68,11 +72,18 @@ export function PinProvider({ children }: { children: ReactNode }) {
   const lockNow = useCallback(() => {
     clearActive()
     sensitiveUntil.current = 0
+    strictUntil.current = 0
+    if (statusRef.current?.hasPin) {
+      void pinLockNow().catch((error) => {
+        toast.error(toMessage(error, "Couldn't lock the server-side PIN window."))
+      })
+    }
     if (statusRef.current?.hasPin) setView('locked')
-  }, [])
+  }, [toast])
 
   const markVerified = useCallback(() => {
     sensitiveUntil.current = Date.now() + SENSITIVE_MS
+    strictUntil.current = Date.now() + STRICT_MS
     touchActive()
   }, [])
 
@@ -113,10 +124,10 @@ export function PinProvider({ children }: { children: ReactNode }) {
   // A PIN switched on or off elsewhere in the app must not leave a stale lock behind.
   useEffect(() => { if (status && !status.hasPin && view === 'locked') setView('open') }, [status, view])
 
-  const requirePin = useCallback(async (reason: string) => {
+  const requirePin = useCallback(async (reason: string, opts?: { strict?: boolean }) => {
     const st = statusRef.current ?? (await qc.fetchQuery<PinStatus>({ queryKey: key, queryFn: getPinStatus, staleTime: Infinity }))
     if (!st.hasPin) return
-    if (Date.now() < sensitiveUntil.current) return
+    if (Date.now() < (opts?.strict ? strictUntil.current : sensitiveUntil.current)) return
     if (pending.current) return pending.current.promise
     let resolve!: () => void
     let reject!: (e: unknown) => void

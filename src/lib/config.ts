@@ -8,4 +8,4 @@ export const AVATAR_MAX_BYTES = 2 * 1024 * 1024 // 2 MB, mirrored by the avatars
 export const AVATAR_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 
 /** The database version this build of the app needs (see vault_schema_version() in supabase/migrations). */
-export const REQUIRED_SCHEMA_VERSION = 6
+export const REQUIRED_SCHEMA_VERSION = 7

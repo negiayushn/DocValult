@@ -6,6 +6,7 @@ export interface PinStatus {
   lockedSeconds: number
   lockAfterMinutes: number
   verifiedSeconds: number
+  strictSeconds: number
 }
 export interface PinResult { ok: boolean; attemptsLeft: number; lockedSeconds: number }
 
@@ -23,7 +24,14 @@ export async function getPinStatus(): Promise<PinStatus> {
     lockedSeconds: Number(r.locked_seconds ?? 0),
     lockAfterMinutes: Number(r.lock_after_minutes ?? 5),
     verifiedSeconds: Number(r.verified_seconds ?? 0),
+    strictSeconds: Number(r.strict_seconds ?? 0),
   }
+}
+
+/** Ends the server-side unlocked windows. */
+export async function pinLockNow(): Promise<void> {
+  const { error } = await supabase.rpc('pin_lock_now')
+  if (error) throw error
 }
 
 export async function verifyPin(pin: string): Promise<PinResult> {

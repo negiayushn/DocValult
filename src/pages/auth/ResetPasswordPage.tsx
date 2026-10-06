@@ -1,3 +1,4 @@
+import { UsernameField } from '@/components/auth/UsernameField'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
@@ -44,6 +45,7 @@ export function ResetPasswordPage() {
   return (
     <AuthLayout title="Choose a new password">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        <UsernameField email={session?.user.email} />
         <Input label="New password" type="password" autoComplete="new-password" hint="At least 8 characters, with a letter and a number." value={password} onChange={(e) => setPassword(e.target.value)} />
         <Input label="Confirm new password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}

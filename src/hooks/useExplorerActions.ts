@@ -45,7 +45,7 @@ export function useExplorerActions() {
       toast.success(docs.length === 1 ? 'Document restored' : `${docs.length} documents restored`)
     },
     async deleteForever(ids: string[]) {
-      await requirePin(ids.length === 1 ? 'Enter your PIN to delete this document permanently.' : `Enter your PIN to delete ${ids.length} documents permanently.`)
+      await requirePin(ids.length === 1 ? 'Enter your PIN to delete this document permanently.' : `Enter your PIN to delete ${ids.length} documents permanently.`, { strict: true })
       const n = await deletePermanently(ids)
       refreshDocs()
       toast.success(n === 1 ? 'Deleted permanently' : `${n} documents deleted permanently`)
@@ -80,7 +80,7 @@ export function useExplorerActions() {
       toast.success('Folder moved')
     },
     async deleteFolder(folder: Folder) {
-      await requirePin(`Enter your PIN to delete the folder "${folder.name}".`)
+      await requirePin(`Enter your PIN to delete the folder "${folder.name}".`, { strict: true })
       await deleteFolder(folder.id)
       refreshFolders()
       toast.success('Folder deleted')

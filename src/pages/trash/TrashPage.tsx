@@ -56,7 +56,7 @@ export function TrashPage() {
         selection.clear()
         setDialog(null)
       } else {
-        await requirePin('Enter your PIN to empty the Trash permanently.')
+        await requirePin('Enter your PIN to empty the Trash permanently.', { strict: true })
         setProgress(0)
         const { deleted, error } = await emptyTrash(setProgress)
         for (const key of ['trash', 'trashCount', 'stats', 'documents', 'recent']) qc.invalidateQueries({ queryKey: [key] })

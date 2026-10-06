@@ -40,7 +40,8 @@ $$;
 revoke execute on function public.pin_recent() from public, anon;
 grant execute on function public.pin_recent() to authenticated;
 
-create or replace function public.pin_status()
+drop function if exists public.pin_status();
+create function public.pin_status()
 returns table (has_pin boolean, locked_seconds int, lock_after_minutes int, verified_seconds int)
 language plpgsql stable security definer set search_path = ''
 as $$

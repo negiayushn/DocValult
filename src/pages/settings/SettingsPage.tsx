@@ -1,3 +1,4 @@
+import { UsernameField } from '@/components/auth/UsernameField'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, KeyRound, Laptop, Lock, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
@@ -172,6 +173,7 @@ function SecuritySection() {
   return (
     <Section title="Security" description="Change your password or sign out of this device.">
       <form onSubmit={onSubmit} className="max-w-md space-y-4" noValidate>
+        <UsernameField email={user?.email} />
         <Input label="Current password" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
         <Input label="New password" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
         <Input label="Confirm new password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
@@ -392,7 +394,7 @@ function DangerSection() {
       return setError('Your password is incorrect.')
     }
     try {
-      await requirePin('Enter your PIN to delete your account and all files.')
+      await requirePin('Enter your PIN to delete your account and all files.', { strict: true })
       await deleteAccount()
       queryClient.clear()
       navigate('/login', { replace: true })
@@ -411,6 +413,7 @@ function DangerSection() {
       <Button className="mt-4" variant="danger" onClick={() => setOpen(true)}><Trash2 className="h-4 w-4" aria-hidden /> Delete my account</Button>
       <Modal open={open} title="Delete your account?" onClose={close} busy={busy}>
         <form onSubmit={onDelete} className="space-y-4" noValidate>
+          <UsernameField email={user?.email} />
           <p className="text-sm text-muted">Everything in your vault will be erased for good. Download anything you want to keep first.</p>
           <Input label="Your password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <Input label="Type DELETE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />

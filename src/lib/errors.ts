@@ -32,7 +32,7 @@ export function toMessage(err: unknown, fallback = 'Something went wrong. Please
     if (e.code && AUTH_MESSAGES[e.code]) return AUTH_MESSAGES[e.code]
     // PostgREST: a function or table the app expects is missing, i.e. a migration hasn't been run yet.
     if (e.code === 'PGRST202' || e.code === 'PGRST205') {
-      return 'The database is missing an update. In the Supabase SQL editor, run the files in supabase/migrations in order (0001 to 0006), then reload.'
+      return 'The database is missing an update. In the Supabase SQL editor, run the files in supabase/migrations in order (0001 to 0007), then reload.'
     }
     if (e.name === 'AuthRetryableFetchError' || /failed to fetch|network/i.test(e.message ?? '')) {
       return 'Network problem. Check your connection and try again.'

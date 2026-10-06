@@ -1,5 +1,5 @@
 -- Personal Vault: PIN lock audit. LOCAL / SCRATCH DATABASE ONLY (creates fake users, rewrites timestamps).
--- Prerequisite: migrations 0001..0006 applied. Last line must read "0 FAILED".
+-- Prerequisite: migrations 0001..0007 applied. Last line must read "0 FAILED".
 \set ON_ERROR_STOP off
 \pset tuples_only on
 \pset format unaligned
@@ -65,7 +65,7 @@ begin
   perform pa.chk('other user D unaffected (no PIN)', pa.val(D,'select has_pin::text from public.pin_status()')='false');
 
   -- 3. Destructive actions are blocked unless the PIN was verified recently
-  update public.user_pins set sensitive_until = now() - interval '1 minute' where user_id = C;
+  update public.user_pins set sensitive_until = now() - interval '1 minute', strict_until = now() - interval '1 minute' where user_id = C;
   perform pa.chk('status shows PIN not currently verified', pa.val(C,'select verified_seconds::text from public.pin_status()')='0');
   perform pa.chk('BLOCKED: move to Trash without recent PIN', pa.try(C,'update public.documents set deleted_at=now() where id=''c0000000-0000-0000-0000-0000000000c2''') like 'error:%PIN_REQUIRED%');
   perform pa.chk('BLOCKED: delete document row without recent PIN', pa.try(C,'delete from public.documents where id=''c0000000-0000-0000-0000-0000000000c2''') like 'error:%PIN_REQUIRED%');
@@ -99,8 +99,25 @@ begin
   perform pa.chk('ALLOWED after PIN: delete folder', pa.try(C,'select public.delete_folder(''f1000000-0000-0000-0000-0000000000c1'')')='ok:1');
   perform pa.chk('ALLOWED after PIN: set auto-lock 15', pa.try(C,'select public.set_pin_lock_timeout(15)')='ok:1');
   perform pa.chk('invalid auto-lock value refused', pa.try(C,'select public.set_pin_lock_timeout(7)') like 'error:%PIN_INVALID%');
+  perform pa.chk('status shows strict window ~30s', pa.val(C,'select (strict_seconds between 1 and 30)::text from public.pin_status()')='true');
   update public.user_pins set sensitive_until = now() - interval '1 second' where user_id = C;
   perform pa.chk('window really expires', pa.val(C,'select public.pin_recent()::text')='false');
+
+  -- 5b. Strict window: permanent deletes need a PIN entered in the last 30 seconds; Trash needs only 5 minutes
+  insert into public.documents(id,user_id,file_name,storage_path,file_type,mime_type,file_size) values
+    ('c0000000-0000-0000-0000-0000000000c3',C,'three.pdf',C::text||'/c0000000-0000-0000-0000-0000000000c3/three.pdf','pdf','application/pdf',10);
+  insert into public.folders(id,user_id,name) values ('f1000000-0000-0000-0000-0000000000c1',C,'empty-folder2') on conflict do nothing;
+  perform pa.try(C,'select * from public.verify_pin(''482916'')');
+  update public.user_pins set strict_until = now() - interval '1 second' where user_id = C;
+  perform pa.chk('5-minute window still open, strict window expired', pa.val(C,'select public.pin_recent()::text||'':''||public.pin_recent_strict()::text')='true:false');
+  perform pa.chk('Trash still allowed with only the 5-minute window', pa.try(C,'update public.documents set deleted_at=now() where id=''c0000000-0000-0000-0000-0000000000c3''') = 'ok:1');
+  perform pa.chk('STRICT: delete document row blocked', pa.try(C,'delete from public.documents where id=''c0000000-0000-0000-0000-0000000000c3''') like 'error:%PIN_REQUIRED%');
+  perform pa.chk('STRICT: delete folder blocked', pa.try(C,'select public.delete_folder(''f1000000-0000-0000-0000-0000000000c1'')') like 'error:%PIN_REQUIRED%');
+  perform pa.try(C,'select * from public.verify_pin(''482916'')');
+  perform pa.chk('fresh PIN opens both windows', pa.val(C,'select public.pin_recent()::text||'':''||public.pin_recent_strict()::text')='true:true');
+  perform pa.chk('pin_lock_now runs', pa.try(C,'select public.pin_lock_now()')='ok:1');
+  perform pa.chk('lock now closes both windows', pa.val(C,'select public.pin_recent()::text||'':''||public.pin_recent_strict()::text')='false:false');
+  perform pa.chk('anon cannot call pin_lock_now or pin_recent_strict', not has_function_privilege('anon','public.pin_lock_now()','execute') and not has_function_privilege('anon','public.pin_recent_strict()','execute'));
 
   -- 6. Changing and removing need the current PIN
   perform pa.chk('change_pin with wrong current fails (ok=false)', pa.val(C,'select ok::text from public.change_pin(''999999'',''739152'')')='false');

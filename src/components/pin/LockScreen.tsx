@@ -1,3 +1,4 @@
+import { UsernameField } from '@/components/auth/UsernameField'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Loader2, Lock } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
@@ -82,6 +83,7 @@ export function LockScreen({ mode, initialLockedSeconds, onUnlocked, onPinRemove
 
           {mode === 'locked' && forgot && (
             <form onSubmit={onForgot} noValidate className="space-y-4">
+              <UsernameField email={user?.email} />
               <div>
                 <h1 className="text-lg font-semibold">Reset your PIN</h1>
                 <p className="mt-1 text-sm text-muted">Enter your account password. The PIN is removed and you can set a new one in Settings.</p>

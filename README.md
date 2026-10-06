@@ -13,7 +13,7 @@ A private document vault: React + TypeScript + Vite + Tailwind on the front, Sup
 | 5 | Search, favorites page, recent, trash, preview | Done |
 | 6 | Storage page, avatar, delete account, mobile polish, PWA | Done |
 | 7 | Security review, performance, error handling, deploy docs | Done |
-| 8 | 6-digit PIN lock (open app, delete, change password) | Done |
+| 8 | 6-digit PIN lock, strict PIN window for permanent deletes, server-side lock | Done |
 
 Routes for later phases already exist behind the auth guard and show an empty state. No mock data is used anywhere.
 
@@ -21,8 +21,8 @@ Routes for later phases already exist behind the auth guard and show an empty st
 
 1. Create a project at supabase.com.
 2. Open SQL Editor and run `supabase/migrations/0001_init.sql` once.
-   - **Fastest path for everything else:** paste and run `supabase/catch_up.sql` (it contains 0002 to 0006 and is safe to run again). The app shows an "out of date" banner, and Settings -> Database shows the version, until this has been done.
-   - Or run the files one by one: `0002_helpers.sql`, `0003_fix_folder_policies.sql`, `0004_search_v2.sql` and `0005_phase6.sql` and `0006_pin.sql` in that order (all are safe to re-run).
+   - **Fastest path for everything else:** paste and run `supabase/catch_up.sql` (it contains 0002 to 0007 and is safe to run again). The app shows an "out of date" banner, and Settings -> Database shows the version, until this has been done.
+   - Or run the files one by one: `0002_helpers.sql`, `0003_fix_folder_policies.sql`, `0004_search_v2.sql`, `0005_phase6.sql`, `0006_pin.sql` and `0007_pin_strict.sql` in that order (all are safe to re-run).
 3. Authentication -> URL Configuration: set Site URL to your app URL and add `http://localhost:5173/**` (and your Vercel URL) to Redirect URLs. Password-reset links need this.
 4. `cp .env.example .env`, then fill in the project URL and publishable (anon) key from Project Settings -> API. Never use the service_role key in this app.
 5. `npm install && npm run dev`
@@ -57,7 +57,7 @@ For a personal vault, consider turning off public signups (Authentication -> Pro
    or connect the Supabase integration, which creates `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; the app accepts those too. Only these public values are ever read by the browser build. Variables like `SUPABASE_SERVICE_ROLE_KEY` are not exposed.
 4. **Variables are baked in at build time.** After adding or changing any, redeploy (Deployments -> ... -> Redeploy). Without them the site shows a "needs its Supabase settings" page.
 5. Supabase -> Authentication -> URL Configuration: Site URL = your Vercel URL; add `https://your-app.vercel.app/**` (and `http://localhost:5173/**`) to Redirect URLs.
-6. Supabase SQL editor: run `supabase/catch_up.sql` (or 0001 then 0002-0006). Check Settings -> Database says version 6.
+6. Supabase SQL editor: run `supabase/catch_up.sql` (or 0001 then 0002-0007). Check Settings -> Database says version 7.
 7. Optional: deploy the `delete-account` function (section above) and turn off public signups.
 
 `vercel.json` (included) rewrites every path to `index.html`, sets a strict Content-Security-Policy and other security headers, and long-caches hashed assets.
@@ -129,12 +129,14 @@ Run `0005_phase6.sql` (or `catch_up.sql`) first. Settings -> Database should rea
 
 ## PIN lock (phase 8)
 
-Run `0006_pin.sql` (or `catch_up.sql`), and redeploy the `delete-account` Edge Function (it now checks the PIN). Settings -> Database should read version 6.
+Run `0006_pin.sql` and `0007_pin_strict.sql` (or just `catch_up.sql`), and redeploy the `delete-account` Edge Function (it now checks the PIN). Settings -> Database should read version 7.
 
 Set it up in Settings -> PIN lock. After that:
 
 - Opening the app (after sign-in) shows a lock screen until the PIN is entered. Auto-lock is configurable (never-while-active windows of 1 to 60 minutes, or lock when the tab is hidden). The Lock button in the header locks immediately.
-- These ask for the PIN again (valid for about 4 minutes after entering it): Move to Trash, Delete forever, Empty Trash, Delete folder, change password, delete account.
+- Move to Trash and change password ask for the PIN unless you entered it in the last 5 minutes.
+- Delete forever, Empty Trash, Delete folder and Delete account always ask (a PIN entered in the last 30 seconds counts, so you are not asked twice in a row).
+- Lock now (and auto-lock) ends both windows, on the server too.
 - 5 wrong tries in a row lock PIN entry for 15 minutes. Weak PINs (111111, 123456) are refused.
 - Forgot PIN: on the lock screen, enter your account password; this removes the PIN and you can set a new one.
 
@@ -143,10 +145,9 @@ How strong is it? Be honest about the limits:
 - The lock screen is a **UI lock**. It protects a device you left unlocked, not someone who has your password and uses the API directly.
 - Trash, delete forever, delete folder, storage file removal and account deletion are **enforced in the database** (PIN_REQUIRED), so they cannot be done without a recent PIN even from outside the app.
 - Changing the password is gated in the app only; Supabase Auth cannot be gated from SQL.
-- "Lock now" does not cancel the 4 to 5 minute window on the server.
 - Password-based PIN reset relies on the sign-in method in the Supabase session token. Test it once on your real project.
 
-Tests: `supabase/tests/pin_audit.sql` (65 checks, local or scratch database only).
+Tests: `supabase/tests/pin_audit.sql` (74 checks, local or scratch database only).
 
 ## PWA notes
 
@@ -157,7 +158,7 @@ Tests: `supabase/tests/pin_audit.sql` (65 checks, local or scratch database only
 ## Security checks (phase 7)
 
 - `supabase/tests/production_check.sql`: **read-only**, safe on your real project. Run it in the SQL editor; every row must say PASS (RLS enabled and forced, buckets private, storage policies present, no anonymous access, functions pinned, schema version).
-- `supabase/tests/security_audit.sql`: a two-user attack simulation (113 checks: reading, editing, deleting, forging ids, moving into another user's folder, tagging another user's file, storage prefixes, anonymous access, RPC isolation). **Run it only on a local or scratch database** (for example `supabase start`), never on production. Last line must read `0 FAILED`.
+- `supabase/tests/security_audit.sql`: a two-user attack simulation (118 checks: reading, editing, deleting, forging ids, moving into another user's folder, tagging another user's file, storage prefixes, anonymous access, RPC isolation). **Run it only on a local or scratch database** (for example `supabase start`), never on production. Last line must read `0 FAILED`.
 - App-level checks to do by hand with two accounts (A and B):
   1. A uploads a file. Signed in as B, paste `/documents/<A's document id>`: "Document not found".
   2. Copy a signed URL from A, wait 5 minutes: it stops working. A signed-out browser can't open it either.
