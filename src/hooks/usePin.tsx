@@ -6,7 +6,7 @@ import { LockScreen } from '@/components/pin/LockScreen'
 import { PinPrompt } from '@/components/pin/PinPrompt'
 import { getPinStatus, pinLockNow, type PinStatus } from '@/services/pin'
 import { clearActive, readActiveAt, touchActive } from '@/lib/pinSession'
-import { PinCancelledError, toMessage } from '@/lib/errors'
+import { PinCancelledError, isPinRequired, toMessage } from '@/lib/errors'
 
 /** The browser trusts a verified PIN for 4 minutes; the database trusts it for 5, so the two never disagree. */
 const SENSITIVE_MS = 4 * 60_000
@@ -20,6 +20,8 @@ interface PinContextValue {
   hasPin: boolean
   /** Resolves immediately when no PIN is set or it was entered recently; otherwise asks, and rejects if cancelled. */
   requirePin: (reason: string, opts?: { strict?: boolean }) => Promise<void>
+  /** Runs a protected action and prompts/retries once if the server's PIN window has expired. */
+  guarded: <T,>(reason: string, run: () => Promise<T>, opts?: { strict?: boolean }) => Promise<T>
   lockNow: () => void
   /** Call after the user has just proven the PIN (for example right after setting or changing it). */
   markVerified: () => void
@@ -137,6 +139,19 @@ export function PinProvider({ children }: { children: ReactNode }) {
     return promise
   }, [qc, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const guarded = useCallback(async <T,>(reason: string, run: () => Promise<T>, opts?: { strict?: boolean }): Promise<T> => {
+    await requirePin(reason, opts)
+    try {
+      return await run()
+    } catch (error) {
+      if (!isPinRequired(error) || !statusRef.current?.hasPin) throw error
+      sensitiveUntil.current = 0
+      strictUntil.current = 0
+      await requirePin(reason, opts)
+      return await run()
+    }
+  }, [requirePin])
+
   const finishPrompt = (ok: boolean) => {
     const p = pending.current
     pending.current = null
@@ -145,7 +160,7 @@ export function PinProvider({ children }: { children: ReactNode }) {
     if (ok) { markVerified(); p.resolve() } else p.reject(new PinCancelledError())
   }
 
-  const value = useMemo<PinContextValue>(() => ({ status, hasPin, requirePin, lockNow, markVerified, refreshStatus }), [status, hasPin, requirePin, lockNow, markVerified, refreshStatus])
+  const value = useMemo<PinContextValue>(() => ({ status, hasPin, requirePin, guarded, lockNow, markVerified, refreshStatus }), [status, hasPin, requirePin, guarded, lockNow, markVerified, refreshStatus])
 
   return (
     <PinContext.Provider value={value}>

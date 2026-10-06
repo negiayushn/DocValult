@@ -14,7 +14,7 @@ import { useExplorerActions } from '@/hooks/useExplorerActions'
 import { useSelection } from '@/hooks/useSelection'
 import { usePin } from '@/hooks/usePin'
 import { emptyTrash } from '@/services/documents'
-import { toMessage } from '@/lib/errors'
+import { toMessage, isPinRequired } from '@/lib/errors'
 import { formatBytes, formatDate } from '@/utils/format'
 import type { VaultDocument } from '@/types/entities'
 
@@ -24,7 +24,7 @@ export function TrashPage() {
   const toast = useToast()
   const qc = useQueryClient()
   const actions = useExplorerActions()
-  const { requirePin } = usePin()
+  const { guarded } = usePin()
   const q = useTrash()
   const docs = useMemo(() => q.data?.pages.flatMap((p) => p.rows) ?? [], [q.data])
   const total = q.data?.pages[0]?.total ?? 0
@@ -56,9 +56,14 @@ export function TrashPage() {
         selection.clear()
         setDialog(null)
       } else {
-        await requirePin('Enter your PIN to empty the Trash permanently.', { strict: true })
         setProgress(0)
-        const { deleted, error } = await emptyTrash(setProgress)
+        let total = 0
+        const { deleted, error } = await guarded('Enter your PIN to empty the Trash permanently.', async () => {
+          const result = await emptyTrash((n) => setProgress(total + n))
+          total += result.deleted
+          if (result.error && isPinRequired(result.error)) throw result.error
+          return { deleted: total, error: result.error }
+        }, { strict: true })
         for (const key of ['trash', 'trashCount', 'stats', 'documents', 'recent']) qc.invalidateQueries({ queryKey: [key] })
         selection.clear()
         if (error) toast.error(`${deleted} deleted, then it stopped: ${toMessage(error, 'something went wrong')}. Try again to finish.`)

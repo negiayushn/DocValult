@@ -136,6 +136,7 @@ Set it up in Settings -> PIN lock. After that:
 - Opening the app (after sign-in) shows a lock screen until the PIN is entered. Auto-lock is configurable (never-while-active windows of 1 to 60 minutes, or lock when the tab is hidden). The Lock button in the header locks immediately.
 - Move to Trash and change password ask for the PIN unless you entered it in the last 5 minutes.
 - Delete forever, Empty Trash, Delete folder and Delete account always ask (a PIN entered in the last 30 seconds counts, so you are not asked twice in a row).
+- If a protected action reaches the server after its PIN window expires, the app asks for the PIN again and retries once.
 - Lock now (and auto-lock) ends both windows, on the server too.
 - 5 wrong tries in a row lock PIN entry for 15 minutes. Weak PINs (111111, 123456) are refused.
 - Forgot PIN: on the lock screen, enter your account password; this removes the PIN and you can set a new one.

@@ -13,7 +13,7 @@ type DocPage = { rows: VaultDocument[]; total: number }
 export function useExplorerActions() {
   const qc = useQueryClient()
   const toast = useToast()
-  const { requirePin } = usePin()
+  const { guarded } = usePin()
 
   const refreshDocs = useCallback(() => {
     for (const key of ['documents', 'document', 'stats', 'recent', 'folderCounts', 'trash', 'trashCount']) qc.invalidateQueries({ queryKey: [key] })
@@ -34,8 +34,7 @@ export function useExplorerActions() {
       toast.success(docs.length === 1 ? 'Document moved' : `${docs.length} documents moved`)
     },
     async trashDocs(ids: string[]) {
-      await requirePin(ids.length === 1 ? 'Enter your PIN to move this document to Trash.' : `Enter your PIN to move ${ids.length} documents to Trash.`)
-      await softDeleteDocuments(ids)
+      await guarded(ids.length === 1 ? 'Enter your PIN to move this document to Trash.' : `Enter your PIN to move ${ids.length} documents to Trash.`, () => softDeleteDocuments(ids))
       refreshDocs()
       toast.success(ids.length === 1 ? 'Moved to Trash' : `${ids.length} documents moved to Trash`)
     },
@@ -45,8 +44,7 @@ export function useExplorerActions() {
       toast.success(docs.length === 1 ? 'Document restored' : `${docs.length} documents restored`)
     },
     async deleteForever(ids: string[]) {
-      await requirePin(ids.length === 1 ? 'Enter your PIN to delete this document permanently.' : `Enter your PIN to delete ${ids.length} documents permanently.`, { strict: true })
-      const n = await deletePermanently(ids)
+      const n = await guarded(ids.length === 1 ? 'Enter your PIN to delete this document permanently.' : `Enter your PIN to delete ${ids.length} documents permanently.`, () => deletePermanently(ids), { strict: true })
       refreshDocs()
       toast.success(n === 1 ? 'Deleted permanently' : `${n} documents deleted permanently`)
     },
@@ -80,10 +78,9 @@ export function useExplorerActions() {
       toast.success('Folder moved')
     },
     async deleteFolder(folder: Folder) {
-      await requirePin(`Enter your PIN to delete the folder "${folder.name}".`, { strict: true })
-      await deleteFolder(folder.id)
+      await guarded(`Enter your PIN to delete the folder "${folder.name}".`, () => deleteFolder(folder.id), { strict: true })
       refreshFolders()
       toast.success('Folder deleted')
     },
-  }), [qc, toast, requirePin, refreshDocs, refreshFolders])
+  }), [qc, toast, guarded, refreshDocs, refreshFolders])
 }

@@ -4,7 +4,7 @@
  * offline message. It never touches Supabase: those requests are cross-origin and are ignored here,
  * so documents, signed URLs and API responses are never stored by the service worker.
  */
-const SHELL = 'vault-shell-v2'
+const SHELL = 'vault-shell-v3'
 const PRECACHE = ['/', '/theme-init.js', '/favicon.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {

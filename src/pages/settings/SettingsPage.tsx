@@ -372,7 +372,7 @@ function DangerSection() {
   const navigate = useNavigate()
   const toast = useToast()
   const { user } = useAuth()
-  const { requirePin } = usePin()
+  const { guarded } = usePin()
   const [open, setOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [typed, setTyped] = useState('')
@@ -394,8 +394,7 @@ function DangerSection() {
       return setError('Your password is incorrect.')
     }
     try {
-      await requirePin('Enter your PIN to delete your account and all files.', { strict: true })
-      await deleteAccount()
+      await guarded('Enter your PIN to delete your account and all files.', deleteAccount, { strict: true })
       queryClient.clear()
       navigate('/login', { replace: true })
       toast.success('Your account and all files were deleted.')

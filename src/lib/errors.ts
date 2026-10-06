@@ -16,8 +16,16 @@ export class PinCancelledError extends AppError {
   constructor() { super('Cancelled. The PIN was not entered.') }
 }
 
+export const PIN_REQUIRED_TEXT = 'Enter your PIN to continue, then try again.'
+
+/** Detect PIN_REQUIRED from database guards and the delete-account Edge Function. */
+export function isPinRequired(err: unknown): boolean {
+  const raw = typeof err === 'object' && err !== null ? String((err as { message?: string }).message ?? '') : ''
+  return /PIN_REQUIRED/.test(raw) || raw === PIN_REQUIRED_TEXT
+}
+
 const PIN_MESSAGES: [RegExp, string][] = [
-  [/PIN_REQUIRED/, 'Enter your PIN to continue, then try again.'],
+  [/PIN_REQUIRED/, PIN_REQUIRED_TEXT],
   [/PIN_INVALID/, 'Choose a 6-digit PIN that is not a simple pattern like 123456 or 111111.'],
   [/PIN_EXISTS/, 'A PIN is already set. Use Change PIN instead.'],
   [/RECENT_LOGIN_REQUIRED/, 'For safety, sign in again and then retry within two minutes.'],
