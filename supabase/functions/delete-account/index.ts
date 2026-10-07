@@ -1,3 +1,4 @@
+// @ts-nocheck  (this file runs on Supabase's Deno runtime; the editor's Node type checker does not know `Deno` or `npm:` imports)
 // Supabase Edge Function: permanently deletes the signed-in user's account and all of their data.
 //
 // This is the ONLY place the service-role key is used. It never reaches the browser:

@@ -1,3 +1,4 @@
+// @ts-nocheck  (this file runs on Supabase's Deno runtime; the editor's Node type checker does not know `Deno` or `npm:` imports)
 // Supabase Edge Function: opens a share link for people who are NOT signed in.
 //
 // A share link is just a short code (see migration 0008_share.sql). This function is the only door a stranger
@@ -5,9 +6,11 @@
 // Trash, and then hands out a one-minute signed URL for that one file. Nothing else is reachable.
 // The service-role key is used here only to read the share_links row and sign that one URL.
 //
-// Deploy:  supabase functions deploy open-share
-// (Leave JWT verification ON. The app calls this with the public anon key, which is a valid JWT, so visitors
-//  who are not signed in still get through. It also keeps random internet traffic off the function.)
+// Deploy:  supabase functions deploy open-share --no-verify-jwt
+// IMPORTANT: turn "Verify JWT" OFF for this function (dashboard: Edge Functions -> open-share -> Details ->
+// "Verify JWT with legacy secret" off). Visitors are not signed in, and browsers send the CORS preflight
+// request without any token, so with verification on the browser blocks every call. This is safe: the function
+// never trusts the caller, it only checks the share code itself and signs a one-minute URL for that one file.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '*').split(',').map((s) => s.trim())

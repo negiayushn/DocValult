@@ -170,10 +170,10 @@ How it works:
 Deploy the function:
 
 ```
-supabase functions deploy open-share
+supabase functions deploy open-share --no-verify-jwt
 ```
 
-Or in the dashboard: Edge Functions -> Deploy a new function -> name it `open-share`, paste `supabase/functions/open-share/index.ts`. Leave "Verify JWT" on: the app calls it with the public anon key, which is a valid token. No secrets to add; `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
+Or in the dashboard: Edge Functions -> Deploy a new function -> name it `open-share`, paste `supabase/functions/open-share/index.ts`. **Turn "Verify JWT" OFF** for this function (CLI: `--no-verify-jwt`; dashboard: open the function -> Details -> switch off "Verify JWT with legacy secret"). Visitors are not signed in, and browsers send the CORS preflight without a token, so with it on you get "blocked by CORS policy ... does not have HTTP ok status". It is safe: the function checks the share code itself. No secrets to add; `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
 
 Honest limits: anyone who has a link can open that one file until it expires or you cancel it, and people can forward it. Cancelling stops new opens; someone who already downloaded the file keeps their copy.
 
