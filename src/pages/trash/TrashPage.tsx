@@ -59,10 +59,10 @@ export function TrashPage() {
         setProgress(0)
         let total = 0
         const { deleted, error } = await guarded('Enter your PIN to empty the Trash permanently.', async () => {
-          const result = await emptyTrash((n) => setProgress(total + n))
-          total += result.deleted
-          if (result.error && isPinRequired(result.error)) throw result.error
-          return { deleted: total, error: result.error }
+          const r = await emptyTrash((n) => setProgress(total + n))
+          total += r.deleted
+          if (r.error && isPinRequired(r.error)) throw r.error
+          return { deleted: total, error: r.error }
         }, { strict: true })
         for (const key of ['trash', 'trashCount', 'stats', 'documents', 'recent']) qc.invalidateQueries({ queryKey: [key] })
         selection.clear()

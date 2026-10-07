@@ -28,10 +28,9 @@ export async function getPinStatus(): Promise<PinStatus> {
   }
 }
 
-/** Ends the server-side unlocked windows. */
+/** Ends the server-side unlocked windows. Best effort: the app is locked locally either way. */
 export async function pinLockNow(): Promise<void> {
-  const { error } = await supabase.rpc('pin_lock_now')
-  if (error) throw error
+  try { await supabase.rpc('pin_lock_now') } catch { /* ignore */ }
 }
 
 export async function verifyPin(pin: string): Promise<PinResult> {

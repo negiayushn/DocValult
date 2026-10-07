@@ -5,7 +5,7 @@
 -- Expected last line: "---- N passed, 0 FAILED of N". Any FAIL line is a security bug.
 -- For your real project use supabase/tests/production_check.sql instead (read-only).
 --
--- Prerequisite: migrations 0001..0005 applied.
+-- Prerequisite: migrations 0001..0008 applied.
 \set ON_ERROR_STOP off
 \pset tuples_only on
 \pset format unaligned
@@ -145,6 +145,31 @@ begin
   perform audit.chk('documents bucket has size limit + mime allowlist', (select file_size_limit is not null and allowed_mime_types is not null from storage.buckets where id='documents'));
   perform audit.chk('avatars bucket has size limit + mime allowlist', (select file_size_limit is not null and allowed_mime_types is not null from storage.buckets where id='avatars'));
   perform audit.chk('no storage policy grants to anon/public', not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and (roles && array['anon','public']::name[])));
+
+  -- 8b. Share links (short codes opened only through the open-share Edge Function)
+  perform audit.chk('A can create a share link for own document', audit.try(A,'select * from public.create_share_link(''d0000000-0000-0000-0000-00000000000a'', 3600)')='ok:1');
+  perform audit.chk('B cannot create a link for A document', audit.try(B,'select * from public.create_share_link(''d0000000-0000-0000-0000-00000000000a'', 3600)') like '%SHARE_NOT_FOUND%');
+  perform audit.chk('A sees own share link', audit.cnt(A,'select * from public.share_links')='1');
+  perform audit.chk('B cannot see A share link', audit.cnt(B,'select * from public.share_links')='0');
+  perform audit.chk('B cannot cancel A share link', audit.try(B,'select public.revoke_share_link('''||(select code from public.share_links limit 1)||''')')='ok:1');
+  perform audit.chk('B cancel did not remove A link', (select count(*) from public.share_links)=1);
+  perform audit.chk('anon cannot read share_links', audit.cnt(null,'select * from public.share_links','anon') like 'error:%');
+  perform audit.chk('anon cannot create share links', audit.try(null,'select * from public.create_share_link(''d0000000-0000-0000-0000-00000000000a'', 3600)','anon') like 'error:%');
+  perform audit.chk('A cannot insert into share_links directly', audit.try(A,'insert into public.share_links(code,user_id,document_id,expires_at) values (''AAAAAAAAAA'','''||A||''',''d0000000-0000-0000-0000-00000000000a'', now()+interval ''1 day'')') like 'error:%');
+  perform audit.chk('A cannot edit share_links directly', audit.try(A,'update public.share_links set expires_at = now() + interval ''365 days''') like 'error:%');
+  perform audit.chk('expiry shorter than a minute refused', audit.try(A,'select * from public.create_share_link(''d0000000-0000-0000-0000-00000000000a'', 10)') like '%SHARE_INVALID_EXPIRY%');
+  perform audit.chk('expiry longer than 7 days refused', audit.try(A,'select * from public.create_share_link(''d0000000-0000-0000-0000-00000000000a'', 700000)') like '%SHARE_INVALID_EXPIRY%');
+  perform audit.chk('share codes are 10 characters', (select bool_and(length(code)=10 and code ~ '^[A-Za-z0-9]+$') from public.share_links));
+  perform audit.chk('A can run cancel on own share link', audit.try(A,'select public.revoke_share_link('''||(select code from public.share_links limit 1)||''')')='ok:1');
+  perform audit.chk('A cancelled own share link (it is gone)', (select count(*) from public.share_links)=0);
+  update public.documents set deleted_at = now() where id='d0000000-0000-0000-0000-00000000000a';
+  perform audit.chk('a document in Trash cannot be shared', audit.try(A,'select * from public.create_share_link(''d0000000-0000-0000-0000-00000000000a'', 3600)') like '%SHARE_NOT_FOUND%');
+  update public.documents set deleted_at = null where id='d0000000-0000-0000-0000-00000000000a';
+  insert into public.documents(id,user_id,file_name,storage_path,file_type,mime_type,file_size) values ('d0000000-0000-0000-0000-0000000000c1',A,'tmp.pdf',A||'/d0000000-0000-0000-0000-0000000000c1/tmp.pdf','pdf','application/pdf',1);
+  perform audit.try(A,'select * from public.create_share_link(''d0000000-0000-0000-0000-0000000000c1'', 3600)');
+  perform audit.chk('link exists for temp document', (select count(*) from public.share_links where document_id='d0000000-0000-0000-0000-0000000000c1')=1);
+  delete from public.documents where id='d0000000-0000-0000-0000-0000000000c1';
+  perform audit.chk('deleting a document removes its share links', (select count(*) from public.share_links)=0);
 
   -- 9. Function hygiene
   for r in select p.proname from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname='public' and p.prokind='f' loop

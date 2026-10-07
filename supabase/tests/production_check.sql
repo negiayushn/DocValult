@@ -40,7 +40,11 @@ checks as (
     exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='documents_objects_delete_own' and qual like '%pin_recent_strict%')
   union all select 'permanent-delete guards use the strict PIN window',
     (select count(*) from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgname in ('documents_guard_delete','folders_guard_delete') and p.proname='guard_pin_strict' and not t.tgisinternal) = 2
-  union all select 'database schema version is at least 7',
-    (select public.vault_schema_version()) >= 7
+  union all select 'share_links is sealed: only SELECT for signed-in users, nothing for anon',
+    not exists (select 1 from information_schema.role_table_grants where table_schema='public' and table_name='share_links' and (grantee in ('anon','public') or (grantee='authenticated' and privilege_type<>'SELECT')))
+  union all select 'share_links has row level security forced',
+    (select relrowsecurity and relforcerowsecurity from pg_class where oid='public.share_links'::regclass)
+  union all select 'database schema version is at least 8',
+    (select public.vault_schema_version()) >= 8
 )
 select case when ok then 'PASS' else 'FAIL' end as result, name from checks order by ok, name;

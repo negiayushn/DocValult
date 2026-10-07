@@ -18,7 +18,7 @@ export class PinCancelledError extends AppError {
 
 export const PIN_REQUIRED_TEXT = 'Enter your PIN to continue, then try again.'
 
-/** Detect PIN_REQUIRED from database guards and the delete-account Edge Function. */
+/** True when the server (database guard or Edge Function) refused because no recent PIN was entered. */
 export function isPinRequired(err: unknown): boolean {
   const raw = typeof err === 'object' && err !== null ? String((err as { message?: string }).message ?? '') : ''
   return /PIN_REQUIRED/.test(raw) || raw === PIN_REQUIRED_TEXT
@@ -28,6 +28,9 @@ const PIN_MESSAGES: [RegExp, string][] = [
   [/PIN_REQUIRED/, PIN_REQUIRED_TEXT],
   [/PIN_INVALID/, 'Choose a 6-digit PIN that is not a simple pattern like 123456 or 111111.'],
   [/PIN_EXISTS/, 'A PIN is already set. Use Change PIN instead.'],
+  [/SHARE_TOO_MANY/, 'You have too many active share links. Cancel some, then try again.'],
+  [/SHARE_NOT_FOUND/, 'This document cannot be shared (it may be in Trash).'],
+  [/SHARE_INVALID_EXPIRY/, 'Pick how long the link should work.'],
   [/RECENT_LOGIN_REQUIRED/, 'For safety, sign in again and then retry within two minutes.'],
 ]
 
@@ -40,7 +43,7 @@ export function toMessage(err: unknown, fallback = 'Something went wrong. Please
     if (e.code && AUTH_MESSAGES[e.code]) return AUTH_MESSAGES[e.code]
     // PostgREST: a function or table the app expects is missing, i.e. a migration hasn't been run yet.
     if (e.code === 'PGRST202' || e.code === 'PGRST205') {
-      return 'The database is missing an update. In the Supabase SQL editor, run the files in supabase/migrations in order (0001 to 0007), then reload.'
+      return 'The database is missing an update. In the Supabase SQL editor, run the files in supabase/migrations in order (0001 to 0008), then reload.'
     }
     if (e.name === 'AuthRetryableFetchError' || /failed to fetch|network/i.test(e.message ?? '')) {
       return 'Network problem. Check your connection and try again.'

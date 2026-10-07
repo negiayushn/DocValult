@@ -1,5 +1,5 @@
 -- Personal Vault: PIN lock audit. LOCAL / SCRATCH DATABASE ONLY (creates fake users, rewrites timestamps).
--- Prerequisite: migrations 0001..0007 applied. Last line must read "0 FAILED".
+-- Prerequisite: migrations 0001..0008 applied. Last line must read "0 FAILED".
 \set ON_ERROR_STOP off
 \pset tuples_only on
 \pset format unaligned
@@ -74,6 +74,7 @@ begin
   perform pa.chk('ALLOWED: orphan (failed upload) object cleanup', pa.try(C,'delete from storage.objects where name like ''%/failed-upload.pdf''')='ok:1');
   perform pa.chk('ALLOWED: ordinary edits (rename) still work', pa.try(C,'update public.documents set file_name=''renamed.pdf'' where id=''c0000000-0000-0000-0000-0000000000c2''')='ok:1');
   perform pa.chk('ALLOWED: favorite toggle still works', pa.try(C,'update public.documents set is_favorite=true where id=''c0000000-0000-0000-0000-0000000000c2''')='ok:1');
+  perform pa.chk('BLOCKED: creating a share link without recent PIN', pa.try(C,'select * from public.create_share_link(''c0000000-0000-0000-0000-0000000000c2'', 3600)') like 'error:%PIN_REQUIRED%');
   perform pa.chk('BLOCKED: loosening auto-lock without recent PIN', pa.try(C,'select public.set_pin_lock_timeout(60)') like 'error:%PIN_REQUIRED%');
 
   -- 4. Wrong PIN, counting, lockout
@@ -93,6 +94,7 @@ begin
 
   -- 5. After a correct PIN the window opens
   perform pa.chk('status shows verified window ~300s', pa.val(C,'select (verified_seconds between 250 and 300)::text from public.pin_status()')='true');
+  perform pa.chk('ALLOWED after PIN: create a share link', pa.try(C,'select * from public.create_share_link(''c0000000-0000-0000-0000-0000000000c2'', 3600)')='ok:1');
   perform pa.chk('ALLOWED after PIN: move to Trash', pa.try(C,'update public.documents set deleted_at=now() where id=''c0000000-0000-0000-0000-0000000000c2''')='ok:1');
   perform pa.chk('ALLOWED after PIN: remove stored file', pa.try(C,'delete from storage.objects where name like ''%/one.pdf''')='ok:1');
   perform pa.chk('ALLOWED after PIN: delete document row', pa.try(C,'delete from public.documents where id=''c0000000-0000-0000-0000-0000000000c2''')='ok:1');

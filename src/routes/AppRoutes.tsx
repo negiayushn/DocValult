@@ -1,4 +1,5 @@
-import { lazy } from 'react'
+import { lazy, Suspense } from 'react'
+import { FullPageSpinner } from '@/components/ui/Spinner'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute, PublicOnlyRoute } from './guards'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -8,6 +9,7 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
+const SharedFilePage = lazy(() => import('@/pages/SharedFilePage').then((m) => ({ default: m.SharedFilePage })))
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const ExplorerPage = lazy(() => import('@/pages/documents/ExplorerPage').then((m) => ({ default: m.ExplorerPage })))
 const DocumentsRoute = lazy(() => import('@/pages/documents/DocumentsRoute').then((m) => ({ default: m.DocumentsRoute })))
@@ -28,6 +30,7 @@ export function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/s/:code" element={<Suspense fallback={<FullPageSpinner />}><SharedFilePage /></Suspense>} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>

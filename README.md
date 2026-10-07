@@ -13,7 +13,7 @@ A private document vault: React + TypeScript + Vite + Tailwind on the front, Sup
 | 5 | Search, favorites page, recent, trash, preview | Done |
 | 6 | Storage page, avatar, delete account, mobile polish, PWA | Done |
 | 7 | Security review, performance, error handling, deploy docs | Done |
-| 8 | 6-digit PIN lock, strict PIN window for permanent deletes, server-side lock | Done |
+| 8 | 6-digit PIN lock (open app, delete, change password) | Done |
 | 9 | Share documents (link, WhatsApp, Telegram, email, native share sheet) | Done |
 
 Routes for later phases already exist behind the auth guard and show an empty state. No mock data is used anywhere.
@@ -22,8 +22,8 @@ Routes for later phases already exist behind the auth guard and show an empty st
 
 1. Create a project at supabase.com.
 2. Open SQL Editor and run `supabase/migrations/0001_init.sql` once.
-   - **Fastest path for everything else:** paste and run `supabase/catch_up.sql` (it contains 0002 to 0007 and is safe to run again). The app shows an "out of date" banner, and Settings -> Database shows the version, until this has been done.
-   - Or run the files one by one: `0002_helpers.sql`, `0003_fix_folder_policies.sql`, `0004_search_v2.sql`, `0005_phase6.sql`, `0006_pin.sql` and `0007_pin_strict.sql` in that order (all are safe to re-run).
+   - **Fastest path for everything else:** paste and run `supabase/catch_up.sql` (it contains 0002 to 0008 and is safe to run again). The app shows an "out of date" banner, and Settings -> Database shows the version, until this has been done.
+   - Or run the files one by one: `0002_helpers.sql`, `0003_fix_folder_policies.sql`, `0004_search_v2.sql` and `0005_phase6.sql` `0006_pin.sql` and `0007_pin_strict.sql` and `0008_share.sql` in that order (all are safe to re-run).
 3. Authentication -> URL Configuration: set Site URL to your app URL and add `http://localhost:5173/**` (and your Vercel URL) to Redirect URLs. Password-reset links need this.
 4. `cp .env.example .env`, then fill in the project URL and publishable (anon) key from Project Settings -> API. Never use the service_role key in this app.
 5. `npm install && npm run dev`
@@ -58,7 +58,7 @@ For a personal vault, consider turning off public signups (Authentication -> Pro
    or connect the Supabase integration, which creates `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; the app accepts those too. Only these public values are ever read by the browser build. Variables like `SUPABASE_SERVICE_ROLE_KEY` are not exposed.
 4. **Variables are baked in at build time.** After adding or changing any, redeploy (Deployments -> ... -> Redeploy). Without them the site shows a "needs its Supabase settings" page.
 5. Supabase -> Authentication -> URL Configuration: Site URL = your Vercel URL; add `https://your-app.vercel.app/**` (and `http://localhost:5173/**`) to Redirect URLs.
-6. Supabase SQL editor: run `supabase/catch_up.sql` (or 0001 then 0002-0007). Check Settings -> Database says version 7.
+6. Supabase SQL editor: run `supabase/catch_up.sql` (or 0001 then 0002-0008). Check Settings -> Database says version 8.
 7. Optional: deploy the `delete-account` function (section above) and turn off public signups.
 
 `vercel.json` (included) rewrites every path to `index.html`, sets a strict Content-Security-Policy and other security headers, and long-caches hashed assets.
@@ -137,7 +137,6 @@ Set it up in Settings -> PIN lock. After that:
 - Opening the app (after sign-in) shows a lock screen until the PIN is entered. Auto-lock is configurable (never-while-active windows of 1 to 60 minutes, or lock when the tab is hidden). The Lock button in the header locks immediately.
 - Move to Trash and change password ask for the PIN unless you entered it in the last 5 minutes.
 - Delete forever, Empty Trash, Delete folder and Delete account always ask (a PIN entered in the last 30 seconds counts, so you are not asked twice in a row).
-- If a protected action reaches the server after its PIN window expires, the app asks for the PIN again and retries once.
 - Lock now (and auto-lock) ends both windows, on the server too.
 - 5 wrong tries in a row lock PIN entry for 15 minutes. Weak PINs (111111, 123456) are refused.
 - Forgot PIN: on the lock screen, enter your account password; this removes the PIN and you can set a new one.
@@ -149,17 +148,34 @@ How strong is it? Be honest about the limits:
 - Changing the password is gated in the app only; Supabase Auth cannot be gated from SQL.
 - Password-based PIN reset relies on the sign-in method in the Supabase session token. Test it once on your real project.
 
-Tests: `supabase/tests/pin_audit.sql` (74 checks, local or scratch database only).
+Tests: `supabase/tests/pin_audit.sql` (76 checks, local or scratch database only).
 
 ## Sharing (phase 9)
 
-No SQL or Edge Function changes are required. Open a document's menu or detail page and choose **Share**.
+Run `0008_share.sql` (or `catch_up.sql`) and deploy the `open-share` Edge Function (see below). Settings -> Database should read version 8.
 
-- **Create link**: choose an expiry (1 hour, 1 day or 7 days), then copy or send it with WhatsApp, Telegram or Email. For other apps, copy and paste the link.
-- **Send the file itself**: on supported browsers and devices, opens the system share sheet with the file attached (up to 50 MB).
-- If a PIN is set, creating a link or sending the file asks for it first.
+Open a document's menu (or its page) and choose **Share**. If a PIN is set, it is asked before the dialog opens.
 
-Anyone with a signed link can open the private file without signing in until it expires. A link cannot be cancelled early; permanently deleting the file makes the link stop working.
+- **Create link**: pick how long it works (1 hour, 1 day or 7 days). You get a short link like `https://your-site/s/AbC123xYz9`. Copy it, or send it with the WhatsApp, Telegram or Email buttons. For Discord, Slack, Instagram and others, copy the link and paste it into the chat.
+- **Cancel a link** any time from the same dialog. It stops working immediately.
+- **Send the file itself**: on phones and browsers that support it, opens the system share sheet with the real file attached (up to 50 MB). The file is fetched when the dialog opens, because browsers only allow the share sheet straight after a tap.
+
+How it works:
+
+- A share link is a random 10-character code stored in `share_links` (only you can see your rows). Anyone opening `/s/<code>` gets a small page with **Open** and **Download**; no sign-in. The page asks the `open-share` Edge Function, which checks the code has not expired or been cancelled and the file is not in Trash, then signs a **one-minute** URL for that one file.
+- Visitors and anonymous users get no direct access to your database or storage. Only the Edge Function (with the service-role key, server side) can read the code.
+- Deleting a document, or moving it to Trash, makes its links stop working. At most 100 active links per account.
+- Creating a link needs a recent PIN (enforced in the database, like Trash).
+
+Deploy the function:
+
+```
+supabase functions deploy open-share
+```
+
+Or in the dashboard: Edge Functions -> Deploy a new function -> name it `open-share`, paste `supabase/functions/open-share/index.ts`. Leave "Verify JWT" on: the app calls it with the public anon key, which is a valid token. No secrets to add; `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
+
+Honest limits: anyone who has a link can open that one file until it expires or you cancel it, and people can forward it. Cancelling stops new opens; someone who already downloaded the file keeps their copy.
 
 ## PWA notes
 
@@ -170,7 +186,7 @@ Anyone with a signed link can open the private file without signing in until it 
 ## Security checks (phase 7)
 
 - `supabase/tests/production_check.sql`: **read-only**, safe on your real project. Run it in the SQL editor; every row must say PASS (RLS enabled and forced, buckets private, storage policies present, no anonymous access, functions pinned, schema version).
-- `supabase/tests/security_audit.sql`: a two-user attack simulation (118 checks: reading, editing, deleting, forging ids, moving into another user's folder, tagging another user's file, storage prefixes, anonymous access, RPC isolation). **Run it only on a local or scratch database** (for example `supabase start`), never on production. Last line must read `0 FAILED`.
+- `supabase/tests/security_audit.sql`: a two-user attack simulation (141 checks: reading, editing, deleting, forging ids, moving into another user's folder, tagging another user's file, storage prefixes, anonymous access, RPC isolation). **Run it only on a local or scratch database** (for example `supabase start`), never on production. Last line must read `0 FAILED`.
 - App-level checks to do by hand with two accounts (A and B):
   1. A uploads a file. Signed in as B, paste `/documents/<A's document id>`: "Document not found".
   2. Copy a signed URL from A, wait 5 minutes: it stops working. A signed-out browser can't open it either.

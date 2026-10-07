@@ -6,7 +6,7 @@ import { LockScreen } from '@/components/pin/LockScreen'
 import { PinPrompt } from '@/components/pin/PinPrompt'
 import { getPinStatus, pinLockNow, type PinStatus } from '@/services/pin'
 import { clearActive, readActiveAt, touchActive } from '@/lib/pinSession'
-import { PinCancelledError, isPinRequired, toMessage } from '@/lib/errors'
+import { PinCancelledError, isPinRequired } from '@/lib/errors'
 
 /** The browser trusts a verified PIN for 4 minutes; the database trusts it for 5, so the two never disagree. */
 const SENSITIVE_MS = 4 * 60_000
@@ -20,7 +20,7 @@ interface PinContextValue {
   hasPin: boolean
   /** Resolves immediately when no PIN is set or it was entered recently; otherwise asks, and rejects if cancelled. */
   requirePin: (reason: string, opts?: { strict?: boolean }) => Promise<void>
-  /** Runs a protected action and prompts/retries once if the server's PIN window has expired. */
+  /** Asks for the PIN if needed, runs the action, and if the server still says PIN_REQUIRED (its window is shorter than ours) asks again and retries once. */
   guarded: <T,>(reason: string, run: () => Promise<T>, opts?: { strict?: boolean }) => Promise<T>
   lockNow: () => void
   /** Call after the user has just proven the PIN (for example right after setting or changing it). */
@@ -75,13 +75,9 @@ export function PinProvider({ children }: { children: ReactNode }) {
     clearActive()
     sensitiveUntil.current = 0
     strictUntil.current = 0
-    if (statusRef.current?.hasPin) {
-      void pinLockNow().catch((error) => {
-        toast.error(toMessage(error, "Couldn't lock the server-side PIN window."))
-      })
-    }
+    if (statusRef.current?.hasPin) void pinLockNow()
     if (statusRef.current?.hasPin) setView('locked')
-  }, [toast])
+  }, [])
 
   const markVerified = useCallback(() => {
     sensitiveUntil.current = Date.now() + SENSITIVE_MS
@@ -143,8 +139,8 @@ export function PinProvider({ children }: { children: ReactNode }) {
     await requirePin(reason, opts)
     try {
       return await run()
-    } catch (error) {
-      if (!isPinRequired(error) || !statusRef.current?.hasPin) throw error
+    } catch (e) {
+      if (!isPinRequired(e) || !statusRef.current?.hasPin) throw e
       sensitiveUntil.current = 0
       strictUntil.current = 0
       await requirePin(reason, opts)
